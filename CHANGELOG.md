@@ -6,6 +6,115 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Install script + plugin ecosystem + security audit (2026-05-01)
+
+Major scope expansion in service of v0.1.0 release readiness. Test count
+goes from 644 → **669 passing** (+25). Pre-push gate stays green.
+
+#### Added — install / lifecycle
+
+- **`install.sh`** — one-shot installer for macOS / Linux / WSL. 9 phases:
+  privacy banner + anti-corruption contract, refuse-to-run gates, OS+Python+git
+  detection, hardware preflight (RAM/disk/GPU), network preflight, Ollama
+  install + start + model pulls, Forge install via uv (or pip fallback),
+  optional extras prompt, .gitignore + symlink + `forge doctor` validation.
+  Modes: interactive (default), `--check` (dry-run), `--yes` (CI/Docker),
+  `upgrade` (reuse existing venv).
+- **`uninstall.sh`** — never touches `.forge/forge.db` without `--with-data`;
+  modes `--with-data`, `--models`, `--all`, `--check`.
+- Both scripts log to `/tmp/forge-install-*.log` for debugging.
+
+#### Added — connector / plugin / skill ecosystem
+
+- **`forge_plugin_api`** — public author API package; stable boundary
+  between Forge daemon and third-party plugins. Exports `Connector`,
+  `Tool`, `ToolResult`, `LLMAdapter`, `GenerationRequest`,
+  `GenerationResult`, plus `forge_plugin_api.testing` (MockSandbox,
+  FakeHttpClient, CapabilityViolation).
+- **`daemon/connectors/`** — native-plugin connector registry with manifest
+  parsing, refused-capability gates (no shell in exec, no wildcard network,
+  no system-path filesystem), SHA-256 directory hashing for pinning.
+- **`daemon/skills/`** — skills system (Claude-Code-compatible markdown +
+  scripts pattern):
+  - `registry.py` — manifest schema v1 + capability validation
+  - `runtime.py` — sandbox runtime (subprocess isolation, resource limits
+    via POSIX rlimit, wall-clock timeout with kill, FORGE_NETWORK_ALLOWLIST
+    env shim for the egress filter)
+  - `lethal_trifecta.py` — capability-graph gate that refuses tool
+    combinations satisfying (private + untrusted + egress); 11 built-in
+    profiles (git, github_mcp, vercel_mcp, supabase_mcp, postgres_mcp,
+    stripe_mcp, sendgrid, web_research, slack_mcp, discord_mcp, linear_mcp).
+- **`daemon/llms/`** — pluggable LLM-adapter registry (`~/.forge/llms/<name>/`).
+  Supports adding new model providers by writing one `plugin.py` + `manifest.toml`.
+
+#### Added — documentation
+
+- **`README.md`** — rewritten for v0.1.0; new install flow, expanded
+  competitor matrix (now includes OpenClaw + Ruflo + skills sandbox row).
+- **`INSTALL.md`** — detailed install guide; modes, exit codes, anti-corruption
+  contract, privacy verification commands, troubleshooting, air-gapped path,
+  Docker fallback, manual install steps.
+- **`docs/CONNECTORS.md`** — tool integration architecture. MCP-first +
+  native-plugin secondary path. Tier-1 / Tier-2 / Tier-3 connector lists.
+  Capability declaration patterns. Configuration reference.
+- **`docs/SKILLS.md`** — skills system + the seven-layer security model
+  (subprocess isolation, capability declaration, signed manifests, path
+  scoping, resource limits, network egress filtering, append-only audit
+  log). "Refusing skills" rules. Per-skill audit log example. Comparison
+  matrix with Claude Code skills / OpenHands microagents / Codex AGENTS.md.
+- **`docs/PLUGIN_DEVELOPMENT.md`** — unified author guide. Manifest schema,
+  connector authoring with @Tool decorator, skill authoring, LLM adapter
+  authoring. Capability declaration patterns, anti-patterns, lethal-trifecta
+  defense, registry submission flow.
+- **`docs/LLMS.md`** — adding new model providers. Provider registry, model
+  registry, family-router rules, cross-family-evaluator preference list,
+  cost calibration, downgrade cascade integration, three-layer tool-call
+  defense (native + xgrammar + BAML).
+- **`docs/SECURITY_AUDIT.md`** — formal threat model + 12-attack-class
+  coverage matrix + 15-layer security adoption plan informed by 2026-05-01
+  agent research sweep. References real-world CVEs: Probllama (CVE-2024-37032),
+  Vanna.AI (CVE-2024-5565), EchoLeak (CVE-2025-32711), mcp-remote
+  (CVE-2025-6514), Cursor CurXecute/MCPoison (CVE-2025-54135/54136). Cites
+  Greshake et al. 2023, Invariant Labs MCP Tool Poisoning 2025, Pillar Security
+  Cursor Rules Backdoor 2025, Willison "lethal trifecta" 2025, Anthropic
+  many-shot 2024, Microsoft Crescendo/Skeleton Key 2024.
+- **`docs/GAP_ANALYSIS.md`** — release gates + sprint roadmap to v0.1.0.
+  ~6 weeks of remaining work organized into 9 sprints (5 done, 4-13 to go).
+  Risk register, accepted limitations, sign-off checklist.
+- **`docs/COMPETITIVE_COMPARISON.md`** — major addendum: OpenClaw deep-dive
+  (Enderfga/openclaw-claude-code, 417 stars, MIT, v2.14.x; comparison matrix);
+  Ruflo deep-dive (ruvnet/ruflo, 34.4k stars; differentiation analysis);
+  top-5 GitHub field snapshot (OpenHands 72k, opencode 152k, Cline 61k,
+  Goose 43k, Aider 44k) with vs-Forge breakdowns.
+
+#### Added — code quality + tooling
+
+- **`tests/test_plugin_system.py`** — 25 new tests covering manifest
+  refusal gates, lethal-trifecta detection, connector registry, loaders,
+  and public API surface.
+- **`.pre-commit-config.yaml`** — bumped ruff-pre-commit to v0.15.12
+  (RUF059 support); detect-private-key now excludes `tests/test_*.py`
+  (test files contain fake PEM fixtures by design).
+- **`.gitleaks.toml`** — allowlist `tests/test_*.py` and
+  `docs/EXECUTION_PLAN.md` for fake-credential test fixtures.
+
+#### Background research (2026-05-01)
+
+Two independent agent investigations informed this work:
+- Agentic-tool exploits 2024–2026 — 12 attack classes, 15 prioritized
+  Forge mitigations (now in SECURITY_AUDIT.md)
+- OpenClaw + Ruflo + top-5 GitHub deep-dive — competitor matrix
+  (now in COMPETITIVE_COMPARISON.md)
+
+#### Roadmap
+
+The plugin runtime (subprocess sandbox + signed manifests + egress filter
++ append-only audit log) is **specified** and **scaffolded** but the
+live wiring is Sprint 6+. See `docs/GAP_ANALYSIS.md` for the 9-sprint
+plan to v0.1.0.
+
+---
+
 ### Code-review fixes (2026-05-01) — see `docs/EXECUTION_PLAN.md`
 
 Sweep of issues surfaced by 3 rounds of critical code review (functionality / code quality / security). Baseline 588 tests → after this sweep **644 tests passing** (+56). Pre-push gate stays green.
