@@ -102,6 +102,37 @@ CREATE TABLE IF NOT EXISTS sessions (
     knowledge_items_applied INTEGER DEFAULT 0
 );
 
+-- Append-only audit log of plugin (skill / connector / LLM-adapter) invocations.
+-- Layer 7 of the seven-layer security model (docs/SKILLS.md). Every dispatch
+-- through daemon/skills/dispatch.py writes one row here BEFORE spawning the
+-- subprocess and updates exit_code/duration via INSERT OR REPLACE — except
+-- the schema itself blocks UPDATE / DELETE via the triggers below, so the
+-- updater path is also INSERT (never modify a finalized row in place).
+--
+-- The triggers refuse any UPDATE / DELETE — once a row lands it's immutable.
+-- This means the dispatcher writes a "started" row, then writes a "completed"
+-- row with the same invocation_id; queries pick the most recent state via
+-- ROWID DESC. Append-only by construction; no privileged role can rewrite history.
+CREATE TABLE IF NOT EXISTS skill_invocations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invocation_id TEXT NOT NULL,
+    plugin_kind TEXT NOT NULL,           -- 'skill' | 'connector' | 'llm'
+    plugin_name TEXT NOT NULL,
+    plugin_version TEXT,
+    manifest_sha256 TEXT NOT NULL,
+    sprint_id TEXT,
+    session_id TEXT,
+    capabilities_json TEXT,              -- JSON snapshot of the network/fs/exec/secrets actually scoped
+    args_json TEXT,                      -- JSON of args (redacted)
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    duration_seconds REAL,
+    exit_code INTEGER,
+    ok INTEGER,                          -- 0 / 1
+    error TEXT,
+    capability_violations TEXT           -- JSON list of violations (egress / fs / exec)
+);
+
 CREATE INDEX IF NOT EXISTS idx_knowledge_topic ON knowledge(topic);
 CREATE INDEX IF NOT EXISTS idx_knowledge_category ON knowledge(category);
 CREATE INDEX IF NOT EXISTS idx_knowledge_confidence ON knowledge(confidence);
@@ -109,6 +140,25 @@ CREATE INDEX IF NOT EXISTS idx_episodes_session ON episodes(session_id);
 CREATE INDEX IF NOT EXISTS idx_episodes_type ON episodes(task_type);
 CREATE INDEX IF NOT EXISTS idx_research_query ON research(query);
 CREATE INDEX IF NOT EXISTS idx_procedures_pattern ON procedures(task_pattern);
+CREATE INDEX IF NOT EXISTS idx_skill_invocations_id ON skill_invocations(invocation_id);
+CREATE INDEX IF NOT EXISTS idx_skill_invocations_name ON skill_invocations(plugin_name);
+CREATE INDEX IF NOT EXISTS idx_skill_invocations_sprint ON skill_invocations(sprint_id);
+
+-- Write-once triggers — refuse UPDATE / DELETE. Even an attacker with
+-- direct sqlite3 access (e.g. via a malicious plugin that loaded sqlite3
+-- and bypassed our API) cannot scrub their tracks without leaving an
+-- error trail.
+CREATE TRIGGER IF NOT EXISTS skill_invocations_no_update
+BEFORE UPDATE ON skill_invocations
+BEGIN
+    SELECT RAISE(ABORT, 'skill_invocations is append-only — UPDATE refused (Layer 7 audit log)');
+END;
+
+CREATE TRIGGER IF NOT EXISTS skill_invocations_no_delete
+BEFORE DELETE ON skill_invocations
+BEGIN
+    SELECT RAISE(ABORT, 'skill_invocations is append-only — DELETE refused (Layer 7 audit log)');
+END;
 """
 
 
@@ -621,6 +671,140 @@ class ForgeDB:
                 (task_id, 1 if success else 0, research_id),
             )
 
+    # --- Skill / connector / LLM-adapter invocation audit log ---
+    #
+    # Append-only by construction: the table-level triggers refuse UPDATE
+    # and DELETE. The dispatcher inserts a "start" row before spawn and a
+    # "finish" row after completion (or kill on timeout). Queries that
+    # need the latest state of an invocation read the most recent row by
+    # ROWID DESC. See daemon/skills/dispatch.py.
+
+    def record_invocation_start(
+        self,
+        *,
+        invocation_id: str,
+        plugin_kind: str,
+        plugin_name: str,
+        plugin_version: str,
+        manifest_sha256: str,
+        sprint_id: str | None,
+        session_id: str | None,
+        capabilities: dict | None,
+        args: list | None,
+    ) -> int:
+        """Write the 'started' row for an invocation. Returns the rowid.
+
+        ``capabilities`` is the dict of network / filesystem / exec /
+        secrets_read scopes the runtime granted *for this run* (not the
+        full manifest — this is the live scope, including any narrowing
+        the dispatcher applied).
+        """
+        from .redact import redact
+
+        caps_redacted = json.dumps(capabilities) if capabilities else None
+        args_redacted = json.dumps([redact(a) if isinstance(a, str) else a for a in (args or [])])
+        with self._conn:
+            cur = self._conn.execute(
+                """INSERT INTO skill_invocations
+                   (invocation_id, plugin_kind, plugin_name, plugin_version,
+                    manifest_sha256, sprint_id, session_id, capabilities_json,
+                    args_json, started_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    invocation_id,
+                    plugin_kind,
+                    plugin_name,
+                    plugin_version,
+                    manifest_sha256,
+                    sprint_id,
+                    session_id,
+                    caps_redacted,
+                    args_redacted,
+                    _now(),
+                ),
+            )
+            return cur.lastrowid
+
+    def record_invocation_finish(
+        self,
+        *,
+        invocation_id: str,
+        plugin_kind: str,
+        plugin_name: str,
+        plugin_version: str,
+        manifest_sha256: str,
+        sprint_id: str | None,
+        session_id: str | None,
+        capabilities: dict | None,
+        duration_seconds: float,
+        exit_code: int | None,
+        ok: bool,
+        error: str | None = None,
+        capability_violations: list[str] | None = None,
+    ) -> int:
+        """Write the 'finished' row. Always an INSERT — the original
+        'started' row stays intact, so the audit trail shows both the
+        spawn and the outcome with their own timestamps.
+
+        ``error`` is redacted before persistence (subprocess stderr can
+        echo credentials passed in env or args).
+        """
+        from .redact import redact
+
+        with self._conn:
+            cur = self._conn.execute(
+                """INSERT INTO skill_invocations
+                   (invocation_id, plugin_kind, plugin_name, plugin_version,
+                    manifest_sha256, sprint_id, session_id, capabilities_json,
+                    started_at, finished_at, duration_seconds, exit_code, ok,
+                    error, capability_violations)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    invocation_id,
+                    plugin_kind,
+                    plugin_name,
+                    plugin_version,
+                    manifest_sha256,
+                    sprint_id,
+                    session_id,
+                    json.dumps(capabilities) if capabilities else None,
+                    _now(),  # started_at on the 'finish' row = its own write time
+                    _now(),
+                    duration_seconds,
+                    exit_code,
+                    1 if ok else 0,
+                    redact(error) if error else None,
+                    json.dumps(capability_violations) if capability_violations else None,
+                ),
+            )
+            return cur.lastrowid
+
+    def list_invocations(
+        self,
+        plugin_name: str | None = None,
+        sprint_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Read invocations newest first. Returns the raw rows; the
+        dispatcher / CLI is responsible for de-duping start+finish pairs
+        if the caller wants only one row per invocation_id.
+        """
+        conditions = []
+        params: list = []
+        if plugin_name:
+            conditions.append("plugin_name = ?")
+            params.append(plugin_name)
+        if sprint_id:
+            conditions.append("sprint_id = ?")
+            params.append(sprint_id)
+        where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+        params.append(limit)
+        rows = self._conn.execute(
+            f"SELECT * FROM skill_invocations{where} ORDER BY id DESC LIMIT ?",
+            params,
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     # --- Utility ---
 
     def close(self) -> None:
@@ -638,7 +822,15 @@ class ForgeDB:
             self._closed = True
 
     def table_counts(self) -> dict:
-        tables = ["episodes", "knowledge", "procedures", "research", "sprint_contracts", "sessions"]
+        tables = [
+            "episodes",
+            "knowledge",
+            "procedures",
+            "research",
+            "sprint_contracts",
+            "sessions",
+            "skill_invocations",
+        ]
         counts = {}
         for t in tables:
             counts[t] = self._conn.execute(f"SELECT COUNT(*) as c FROM {t}").fetchone()["c"]
