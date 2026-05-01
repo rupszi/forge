@@ -1,12 +1,12 @@
 # Forge — Handover Brief
 
-> **Purpose**: a fresh chat session can read this document and immediately pick up where we left off without context loss. Updated 2026-05-01 end-of-session.
+> **Purpose**: a fresh chat session can read this document and immediately pick up where we left off without context loss. Updated 2026-05-01 — Sprint 6.1 closed.
 
 ---
 
 ## In one paragraph
 
-Forge is a multi-agent coding orchestrator (planner / generator / cross-family-evaluator) that runs locally on open-weight LLMs by default, with a persistent SQLite KB that compounds across sessions. We are at **Phase 1, Sprint 6.0 complete**. The next milestone is **v0.1.0 — a signed, distributable desktop app (Tauri v2 + Python sidecar + Next.js webview)** built from the 5 HTML mockups at `mockups/`. The full 16-week delivery plan lives at `docs/DELIVERY_PLAN.md`. **The next concrete task is Sprint 6.1 — the plugin runtime.**
+Forge is a multi-agent coding orchestrator (planner / generator / cross-family-evaluator) that runs locally on open-weight LLMs by default, with a persistent SQLite KB that compounds across sessions. We are at **Phase 1, Sprint 6.1 complete** — the plugin runtime is wired end-to-end (egress filter, append-only audit log, manifest hash pinning, dispatcher, capability re-approval, CLI healthchecks). The next milestone is **v0.1.0 — a signed, distributable desktop app (Tauri v2 + Python sidecar + Next.js webview)** built from the 5 HTML mockups at `mockups/`. The full 16-week delivery plan lives at `docs/DELIVERY_PLAN.md`. **The next concrete task is Sprint 6.2 — mode enforcement (~2 days).**
 
 ---
 
@@ -17,7 +17,7 @@ cd /Users/palmegyes/Development/forge
 
 # 1. Tests must be green
 PYTHONPATH=. .venv/bin/pytest tests/ --no-header -q | tail -3
-# Expect: 669 passed, 1 skipped
+# Expect: 744 passed, 1 skipped
 
 # 2. Lint + format must be clean
 .venv/bin/ruff check daemon tests forge_plugin_api | tail -3
@@ -26,19 +26,19 @@ PYTHONPATH=. .venv/bin/pytest tests/ --no-header -q | tail -3
 # 3. Commit log
 git log --oneline | head -15
 
-# 4. Working tree
+# 4. Working tree clean
 git status --short
-# Expect: M daemon/cli.py, M pyproject.toml, ?? daemon/tui/
-# (these are leftover from Sprint 6.0 work the user has been editing
-#  manually — not blocking)
+# Expect: empty (Sprint 6.1 closed)
 
-# 5. Sanity-import everything
+# 5. Sanity-import everything (incl. Sprint 6.1 surfaces)
 PYTHONPATH=. .venv/bin/python -c "
 from daemon import wizard, billing, scheduler, recovery, events
 from daemon.connectors import ConnectorRegistry
-from daemon.skills import is_blocked_combination
+from daemon.skills import is_blocked_combination, PluginsLock, SkillTampered, dispatch_plugin
 from daemon.llms import list_llms
-from forge_plugin_api import Connector, Tool, LLMAdapter
+from forge_plugin_api import Connector, Tool, LLMAdapter, CapabilityViolation, make_http_client
+from daemon.wizard import confirm_capability_changes
+from daemon.cli import cmd_connectors, cmd_skills
 print('all imports ok')
 "
 ```
@@ -51,12 +51,12 @@ If any of those fail, troubleshoot before continuing.
 
 | Layer | Path | Lines | Status |
 |---|---|---|---|
-| Daemon (Python 3.12) | `daemon/` | ~9,500 | Functional — Sprint 6.0 complete; plugin runtime pending Sprint 6.1 |
-| Plugin author API | `forge_plugin_api/` | ~500 | Stable contract; `Connector`, `Tool`, `LLMAdapter`, `MockSandbox`, `FakeHttpClient` |
+| Daemon (Python 3.12) | `daemon/` | ~10,200 | Functional — Sprint 6.1 complete (plugin runtime wired); 6.2 next |
+| Plugin author API | `forge_plugin_api/` | ~700 | Adds `http.py` egress shim — `Connector`, `Tool`, `LLMAdapter`, `MockSandbox`, `FakeHttpClient`, `CapabilityViolation`, `GuardedAsyncClient`, `make_http_client` |
 | UI (Next.js) | `ui/` | ~2,400 | Builds clean (`next build` ok); 12 components incl. ContextMeter / ModePicker / TranscriptView / AttachMenu / SlashCommandPalette / OutputStream / MetadataBar |
 | Mockups | `mockups/` | 5 HTML files + index | Saved 2026-05-01; **the contract for Phase 5 UI rebuild** |
 | Install scripts | `install.sh`, `uninstall.sh` | ~700 | 9-phase interactive installer; `--check` / `--yes` / `upgrade` modes |
-| Tests | `tests/` | 36 files | 669 passing, 1 skipped (mcp extra) |
+| Tests | `tests/` | 41 files | 744 passing, 1 skipped (mcp extra) |
 | Docs | `docs/` | 14 files | All current — see Master Plan below |
 
 ---
@@ -112,22 +112,23 @@ If any of these become contentious, write them up as ADR-018+.
 
 ## What's next, concretely
 
-**Phase 1, Sprint 6.1 — Plugin runtime** (~5 days)
+**Sprint 6.1 — Plugin runtime — DONE.** All six tasks landed; acceptance gates verified end-to-end with real-subprocess tests.
 
-The connector / skill / LLM-adapter registries exist as data structures but **nothing actually runs a plugin yet**. This is the headline missing piece.
-
-| # | Task | File(s) | Acceptance |
+| # | Task | What landed | Test file |
 |---|---|---|---|
-| 6.1.1 | Wire `daemon/skills/runtime.py::run_skill` into the scheduler | `daemon/scheduler.py` | A sprint that references a skill spawns a subprocess with the manifest's capability env (`FORGE_NETWORK_ALLOWLIST`, `FORGE_FS_WRITABLE`) |
-| 6.1.2 | Egress filter shim wrapping `httpx.AsyncClient` | `forge_plugin_api/http.py` (NEW) | A plugin trying to fetch a non-allowlisted URL raises `CapabilityViolation` |
-| 6.1.3 | Append-only audit log: `skill_invocations` table with write-once trigger | `daemon/db.py` | Every invocation writes a row; UPDATE blocked by trigger |
-| 6.1.4 | Manifest hash pinning: `.forge/plugins.lock` + recompute-and-refuse loop | `daemon/connectors/registry.py` | Tampered plugin file refuses to run with `SkillTampered` |
-| 6.1.5 | Capability-change re-approval prompt | `daemon/wizard.py` | Manifest with new capability triggers prompt before next run |
-| 6.1.6 | `forge connectors test <name>` / `forge skills test <name>` | `daemon/cli.py` | Healthcheck runs in sandbox; pass/fail reported |
+| 6.1.1 | Plugin dispatcher wired into scheduler | `daemon/skills/dispatch.py::dispatch_plugin` ties hash verify + trifecta + sandbox + audit; re-exported from `daemon.scheduler` | `tests/test_plugin_dispatch.py` (7 tests, 2 real subprocess) |
+| 6.1.2 | Egress filter shim wrapping `httpx.AsyncClient` | `forge_plugin_api/http.py` — `GuardedAsyncClient`, `make_http_client`, `CapabilityViolation`; `Connector` / `LLMAdapter` defaults updated | `tests/test_plugin_http.py` (16 tests) |
+| 6.1.3 | Append-only `skill_invocations` table + write-once trigger | `daemon/db.py` schema + `record_invocation_start` / `record_invocation_finish` / `list_invocations`; UPDATE/DELETE refused by trigger | `tests/test_skill_invocations_audit.py` (10 tests) |
+| 6.1.4 | Manifest hash pinning via `.forge/plugins.lock` | `daemon/skills/lock.py` — `PluginsLock`, `LockEntry`, `SkillTampered`, `default_lock_path`; TOML format, schema-versioned | `tests/test_plugins_lock.py` (17 tests) |
+| 6.1.5 | Capability-change re-approval prompt | `daemon/wizard.py::confirm_capability_changes` + `find_widened_capabilities`; pure narrowing auto-approves; widening prompts default-N | `tests/test_capability_reapproval.py` (12 tests) |
+| 6.1.6 | `forge connectors/skills test <name>` CLI healthchecks | `daemon/cli.py::cmd_connectors` / `cmd_skills` with `add` / `install` / `list` / `test` / `remove` actions | `tests/test_cli_plugin_commands.py` (13 tests) |
 
-**Acceptance gate for Sprint 6.1**: a tampered plugin file refuses to run with a clear `SkillTampered` message. A plugin trying to fetch a non-allowlisted URL raises `CapabilityViolation`. The audit log shows every invocation.
+**Acceptance gates verified:**
+- ✓ A tampered plugin file refuses to run with `SkillTampered` (test: `test_tampered_plugin_refuses_to_run`)
+- ✓ A plugin trying to fetch a non-allowlisted URL raises `CapabilityViolation` (test: `test_egress_to_non_allowlisted_host_raises_capability_violation` — real subprocess)
+- ✓ The audit log shows every invocation (test: `test_every_invocation_writes_two_rows`)
 
-After 6.1: Sprint 6.2 (mode enforcement, 2 days) → 6.3 (slash handlers, 2 days) → 6.4 (reference connectors, 3 days). Then Phase 2 (Claude Code parity, 3 weeks).
+**Next: Sprint 6.2 — Mode enforcement** (~2 days). Wire the existing `ModePicker` UI mode (auto / accept_edits / plan / ask / bypass) into the daemon so each mode actually changes the agent loop's behavior. Currently `set_mode` only updates the WS state — the generator and evaluator don't see it. After 6.2: 6.3 (slash handlers, 2 days) → 6.4 (reference connectors, 3 days). Then Phase 2 (Claude Code parity, 3 weeks).
 
 ---
 
@@ -247,6 +248,6 @@ For the full history: `git log --oneline | wc -l` → ~50 commits since session 
 
 ## TL;DR for a fresh chat
 
-> "We're building a desktop coding-agent app. Plan is locked at `docs/DELIVERY_PLAN.md` — 16 weeks, Tauri v2 + Python sidecar, ~$700 out-of-pocket. We're at week 1 of Phase 1. Next concrete task is Sprint 6.1 — wire the plugin runtime so skills/connectors actually run subprocesses with capability enforcement. Tests are at 669 passing, lint+format clean, 50+ commits in. The user is in auto mode; execute Sprint 6.1 unless they redirect."
+> "We're building a desktop coding-agent app. Plan is locked at `docs/DELIVERY_PLAN.md` — 16 weeks, Tauri v2 + Python sidecar, ~$700 out-of-pocket. **Sprint 6.1 (plugin runtime) is done** — egress shim, audit log, plugin lock, dispatcher, re-approval prompt, CLI healthchecks all wired with real-subprocess tests. Next concrete task is Sprint 6.2 — wire the existing UI mode picker (auto / accept_edits / plan / ask / bypass) into the agent loop so the modes actually change behavior. Tests at 744 passing, lint+format clean. The user is in auto mode; execute Sprint 6.2 unless they redirect."
 
 Welcome to Forge.
