@@ -94,21 +94,11 @@ export interface ProjectContext {
   knowledge_count?: number;
 }
 
-export type WSMessage =
-  | { type: "project_context" } & ProjectContext
-  | { type: "plan_created"; sprints: SprintContract[] }
-  | { type: "sprint_started"; sprint_id: string; attempt: number }
-  | { type: "sprint_generated"; sprint_id: string }
-  | { type: "sprint_evaluated"; sprint_id: string; verdict: string }
-  | { type: "sprint_revised"; sprint_id: string; revision: number }
-  | { type: "sprint_completed"; sprint_id: string }
-  | { type: "sprint_failed"; sprint_id: string; error: string }
-  | { type: "merge_ready"; worktrees: string[] }
-  | { type: "merge_complete" }
-  | { type: "budget_update" } & BudgetState
-  | { type: "budget_downgrade"; sprint_id: string; model: string }
-  | { type: "knowledge_results"; items: KnowledgeItem[] }
-  | { type: "knowledge_updated"; id?: number; deleted?: boolean }
-  | { type: "session_complete"; session: Session }
-  | { type: "status"; sessions: Session[]; knowledge_count: number; budget: BudgetState }
-  | { type: "error"; error: string };
+// Wide-open message envelope. The dashboard handles many event types
+// (EventType.value strings like "sprint.evaluated") plus the legacy
+// snake_case ones — pinning every type here is a maintenance cost we
+// don't pay back. The hook narrows by inspection.
+export type WSMessage = {
+  type: string;
+  [key: string]: unknown;
+};
