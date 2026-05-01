@@ -185,6 +185,67 @@ async def _handle_message_inner(
         sessions = db.list_sessions(limit=msg.get("limit", 20))
         return {"type": "sessions_list", "sessions": sessions}
 
+    # ── Claude-Code-style UI message handlers ──
+    #
+    # The new dashboard surfaces (mode picker, slash palette, attach menu,
+    # transcript view) all dispatch through here. Each handler is small —
+    # the heavy lifting lives in daemon/scheduler.py / daemon/safety.py /
+    # daemon/skills/.
+
+    if msg_type == "set_mode":
+        # Persist the mode on the BudgetController for now; dedicated
+        # session-state object is Sprint 6 work. Mode enforcement at the
+        # scheduler boundary is also Sprint 6.
+        budget._mode = msg.get("mode", "auto")  # type: ignore[attr-defined]
+        return {"type": "mode_changed", "mode": budget._mode}  # type: ignore[attr-defined]
+
+    if msg_type == "set_model":
+        # Front-end model switch. The actual routing happens at sprint
+        # creation time — this just records the user's preference for the
+        # next plan.
+        return {"type": "model_changed", "model": msg.get("model", "")}
+
+    if msg_type == "connectors.list":
+        from .connectors import ConnectorRegistry
+
+        reg = ConnectorRegistry()
+        names = [e.manifest.name for e in reg.list_all()]
+        return {"type": "connectors_list", "names": names}
+
+    if msg_type == "skills.list":
+        from .skills.registry import DEFAULT_SKILL_ROOT
+
+        names: list[str] = []
+        if DEFAULT_SKILL_ROOT.is_dir():
+            names = [p.name for p in DEFAULT_SKILL_ROOT.iterdir() if p.is_dir()]
+        return {"type": "skills_list", "names": names}
+
+    if msg_type == "llms.list":
+        from .llms import list_llms
+
+        names = [e.manifest.name for e in list_llms()]
+        return {"type": "llms_list", "names": names}
+
+    if msg_type in ("slash.help", "slash.clear"):
+        # Pure UI-side commands echoed back; client handles them.
+        return {"type": "slash_ack", "command": msg_type}
+
+    if msg_type == "wizard":
+        # The CLI handles the interactive wizard; from the browser we just
+        # return a hint pointing the user at the terminal command. A
+        # browser-native wizard (with form-based capability picking) is
+        # Sprint 7 work.
+        return {
+            "type": "wizard_hint",
+            "message": "Open a terminal in this project and run: forge wizard",
+        }
+
+    if msg_type in ("attach.files", "attach.folder", "connector.activate", "plugins.gallery"):
+        # Stub acknowledgement — full plumbing is Sprint 6+. This avoids
+        # the "Unknown message type" error so the UI doesn't surface
+        # red text for actions that aren't wired yet.
+        return {"type": "ack", "command": msg_type}
+
     return {"type": "error", "error": f"Unknown message type: {msg_type}"}
 
 
