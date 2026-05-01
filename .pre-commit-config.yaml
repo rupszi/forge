@@ -1,0 +1,54 @@
+# Forge pre-commit (FAST hooks only — sub-2-second).
+# Heavy gate (lint+typecheck+tests+build) lives in scripts/pre-push.sh.
+# See docs/ENGINEERING_STANDARDS.md §7 for the philosophy.
+#
+# Install both hooks:
+#   uv run pre-commit install --hook-type pre-commit --hook-type pre-push
+
+default_install_hook_types: [pre-commit, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-toml
+      - id: check-yaml
+      - id: check-json
+        exclude: ^(ui/tsconfig\.json|tests/data/)
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.0
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      # In ruff-pre-commit v0.8.4 the IDs are ``ruff`` and ``ruff-format``.
+      # ``ruff-check`` was renamed-in later versions; bumping ``rev`` is the
+      # follow-up. See docs/EXECUTION_PLAN.md and the chore commit pinning
+      # this fix.
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # Heavy gate routed to pre-push stage. The actual logic lives in
+  # scripts/pre-push.sh so we can do conditional checks based on the diff.
+  - repo: local
+    hooks:
+      - id: pre-push-gate
+        name: Heavy gate (lint + typecheck + tests, conditional on diff)
+        entry: bash scripts/pre-push.sh
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
