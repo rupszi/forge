@@ -423,6 +423,175 @@ def _maybe_run_wizard(forge_dir) -> None:
             sys.exit(0)
 
 
+def cmd_connectors(args):
+    """Connector management — list / add / enable / disable / test / remove.
+
+    Sprint 6.1.6: ``forge connectors test <name>`` runs a healthcheck
+    invocation through the dispatcher so the user can verify a plugin
+    is correctly installed, pinned, and able to spawn under the sandbox
+    runtime before relying on it in a sprint.
+
+    The CLI surface is intentionally narrow for v0.1.0; richer ops
+    (update, audit, edit-capabilities) land in Sprint 6.4 alongside
+    the reference connectors.
+    """
+    return _run_async(_cmd_plugin("connector", args))
+
+
+def cmd_skills(args):
+    """Skill management — install / list / enable / disable / test / remove."""
+    return _run_async(_cmd_plugin("skill", args))
+
+
+async def _cmd_plugin(kind: str, args) -> int:
+    """Shared implementation for ``forge connectors`` and ``forge skills``.
+
+    Both surfaces share the same lifecycle (load → pin → test → run); the
+    only difference is which registry / loader to use. We dispatch on
+    ``kind`` rather than duplicating the subcommand bodies.
+    """
+    from pathlib import Path as _Path
+
+    from .connectors.registry import load_connector
+    from .scheduler import dispatch_plugin
+    from .skills import PluginsLock, default_lock_path
+    from .skills.registry import load_skill
+
+    project_path = _Path(os.getcwd())
+    forge_dir = project_path / ".forge"
+    lock = PluginsLock(default_lock_path(project_path))
+
+    action = args.action
+    name = getattr(args, "name", None) or ""
+
+    if action == "list":
+        # List pinned plugins of this kind.
+        for key, entry in sorted(lock.all_entries().items()):
+            if not key.startswith(f"{kind}:"):
+                continue
+            plugin_name = key.split(":", 1)[1]
+            print(f"  {plugin_name:20s}  v{entry.version or '?':10s}  {entry.sha256[:12]}…")
+        return 0
+
+    if action == "add" or action == "install":
+        path_arg = getattr(args, "path", None) or name
+        if not path_arg:
+            print(f"  Usage: forge {kind}s {action} <path>")
+            return 1
+        plugin_dir = _Path(path_arg).expanduser().resolve()
+        try:
+            entry = load_skill(plugin_dir) if kind == "skill" else load_connector(plugin_dir)
+        except (FileNotFoundError, ValueError) as e:
+            print(f"  ✗ failed to load plugin: {e}")
+            return 1
+
+        manifest_name = entry.manifest.name
+        # If the plugin is already pinned with different capabilities,
+        # require re-approval (Sprint 6.1.5 hookup).
+        from .skills.dispatch import _build_capabilities_dict
+        from .wizard import confirm_capability_changes
+
+        new_caps = _build_capabilities_dict(entry.manifest)
+        diff = lock.diff_capabilities(kind, manifest_name, new_caps)
+        if diff is not None:
+            approved = confirm_capability_changes(
+                plugin_kind=kind,
+                plugin_name=manifest_name,
+                diff=diff,
+            )
+            if not approved:
+                print(f"  ✗ {kind} {manifest_name} not approved — leaving previous pin intact")
+                return 1
+
+        lock.pin(
+            kind,
+            manifest_name,
+            sha256=entry.manifest_sha256,
+            version=entry.manifest.version,
+            approved_capabilities=new_caps,
+        )
+        forge_dir.mkdir(exist_ok=True)
+        lock.save()
+        print(f"  ✓ pinned {kind}:{manifest_name} v{entry.manifest.version}")
+        print(f"    sha256: {entry.manifest_sha256[:16]}…")
+        return 0
+
+    if action == "remove":
+        if not name:
+            print(f"  Usage: forge {kind}s remove <name>")
+            return 1
+        if lock.unpin(kind, name):
+            forge_dir.mkdir(exist_ok=True)
+            lock.save()
+            print(f"  ✓ unpinned {kind}:{name}")
+            return 0
+        print(f"  ✗ no pinned {kind}:{name}")
+        return 1
+
+    if action == "test":
+        if not name:
+            print(f"  Usage: forge {kind}s test <name>")
+            return 1
+        # Look up the pinned entry — we need its plugin_path stored
+        # nowhere yet. For v0.1.0 the convention is plugins live at
+        # ~/.forge/plugins/<name> (connectors) or ~/.forge/skills/<name>
+        # (skills). The user can override by passing --path.
+        if kind == "skill":
+            default_root = _Path.home() / ".forge" / "skills"
+        else:
+            default_root = _Path.home() / ".forge" / "plugins"
+        path_arg = getattr(args, "path", None)
+        plugin_dir = _Path(path_arg).expanduser().resolve() if path_arg else (default_root / name)
+        if not plugin_dir.is_dir():
+            print(f"  ✗ no plugin directory at {plugin_dir}")
+            print("    Use --path to point at the plugin source if it lives elsewhere.")
+            return 1
+
+        try:
+            entry = load_skill(plugin_dir) if kind == "skill" else load_connector(plugin_dir)
+        except (FileNotFoundError, ValueError) as e:
+            print(f"  ✗ failed to load plugin: {e}")
+            return 1
+
+        # Run a healthcheck through the dispatcher. The plugin's
+        # entry_script doubles as healthcheck unless a separate
+        # scripts/healthcheck.py exists.
+        from .db import ForgeDB
+
+        db = ForgeDB(DB_PATH)
+        try:
+            result = await dispatch_plugin(
+                kind=kind,
+                name=entry.manifest.name,
+                plugin_path=plugin_dir,
+                manifest=entry.manifest,
+                manifest_sha256=entry.manifest_sha256,
+                args=[],
+                db=db,
+                lock=lock,
+            )
+        finally:
+            db.close()
+
+        if result.ok:
+            print(f"  ✓ {kind}:{entry.manifest.name} healthcheck passed")
+            if result.sandbox_result and result.sandbox_result.duration_seconds:
+                print(f"    duration: {result.sandbox_result.duration_seconds:.2f}s")
+            return 0
+
+        print(f"  ✗ {kind}:{entry.manifest.name} healthcheck FAILED")
+        if result.error:
+            print(f"    error: {result.error}")
+        if result.sandbox_result and result.sandbox_result.stderr:
+            stderr_tail = result.sandbox_result.stderr.strip().splitlines()[-5:]
+            for line in stderr_tail:
+                print(f"    | {line}")
+        return 1
+
+    print(f"  Unknown action: {action}")
+    return 1
+
+
 def cmd_replay(args):
     """Replay a session's trace JSONL.
 
@@ -512,6 +681,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit raw JSONL instead of pretty-printed (pipeable to jq)",
     )
 
+    # ---- connectors / skills (Sprint 6.1.6) ----
+    #
+    # Both share the same lifecycle (load → pin → test → remove); the only
+    # difference is which loader to use. We define the parser shape once
+    # and add it under both subcommands so muscle memory works either way.
+    for surface, help_blurb in (
+        ("connectors", "Manage native connectors (load / pin / test / remove)"),
+        ("skills", "Manage Claude-Code-compatible skills (load / pin / test / remove)"),
+    ):
+        s = sub.add_parser(surface, help=help_blurb)
+        s.add_argument(
+            "action",
+            choices=["list", "add", "install", "test", "remove"],
+            help=(
+                "list: show pinned plugins; "
+                "add/install: load a plugin dir + pin it in plugins.lock; "
+                "test: run a healthcheck through the sandbox dispatcher; "
+                "remove: unpin (does not delete files on disk)"
+            ),
+        )
+        s.add_argument("name", nargs="?", default="", help="Plugin name (or path for add/install)")
+        s.add_argument(
+            "--path",
+            default=None,
+            help="Path to the plugin directory (overrides the default ~/.forge lookup)",
+        )
+
     return parser
 
 
@@ -536,6 +732,8 @@ def main():
         "replay": cmd_replay,
         "mcp-serve": cmd_mcp_serve,
         "wizard": cmd_wizard,
+        "connectors": cmd_connectors,
+        "skills": cmd_skills,
     }
 
     if args.command in commands:
