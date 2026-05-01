@@ -1,0 +1,29 @@
+# Forge gitleaks config — extends defaults with project-specific allowlist
+[extend]
+useDefault = true
+
+[allowlist]
+description = """
+Forge research notes and CHANGELOG contain example identifiers (Anthropic msg IDs,
+sprint contract IDs, sample fixtures) that look like secrets but are not.
+"""
+paths = [
+  '''docs/research/notes/.*\.md$''',
+  '''docs/research/.*\.md$''',
+  '''CHANGELOG\.md$''',
+  '''docs/BUILD_PLAN\.md$''',
+  '''tests/data/.*\.json$''',
+  '''tests/fixtures/.*\.py$''',
+]
+regexes = [
+  # Example Anthropic message IDs in docs
+  '''msg_[A-Za-z0-9]{20,}''',
+  # Sprint contract example IDs
+  '''sprint-[a-z0-9]{6,8}''',
+  # Worktree IDs
+  '''wt-[a-z0-9]{6,8}''',
+  # Session IDs
+  '''sess-[a-z0-9]{6,8}''',
+  # Example Ollama model hashes
+  '''sha256:[0-9a-f]{12,}''',
+]
