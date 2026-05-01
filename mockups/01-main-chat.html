@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<title>Forge — Main chat (in-session)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-0: #0a0a0f; --bg-1: #12121a; --bg-2: #1a1a24; --bg-3: #252535;
+    --border: #1e1e2e; --border-2: #2a2a3a;
+    --text: #e5e5ed; --muted: #6b6b80; --dim: #4a4a5a;
+    --purple: #a78bfa; --purple-bg: rgba(167, 139, 250, 0.12);
+    --teal: #5eead4; --teal-bg: rgba(94, 234, 212, 0.12);
+    --green: #4ade80; --amber: #fbbf24; --red: #f87171; --orange: #fb923c;
+    --blue: #60a5fa; --pink: #f472b6;
+  }
+  body {
+    background: var(--bg-0); color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    height: 100vh; display: grid;
+    grid-template-columns: 240px 1fr 320px;
+    overflow: hidden;
+  }
+  kbd { font: 10px/1 ui-monospace, "SF Mono", Menlo, monospace; background: var(--bg-2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 4px; color: var(--muted); }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  button { background: none; border: none; color: inherit; cursor: pointer; font: inherit; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+
+  /* ── LEFT SIDEBAR: sessions / folders / projects ───────── */
+  aside.left {
+    background: #0d0d12; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  .left-header {
+    padding: 12px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .logo { width: 22px; height: 22px; border-radius: 5px;
+    background: linear-gradient(135deg, var(--purple), var(--teal));
+    display: grid; place-items: center; color: #000; font-weight: 700; font-size: 11px;
+  }
+  .brand { font-weight: 600; letter-spacing: 0.2px; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-left: auto; box-shadow: 0 0 6px var(--green); }
+  .new-btn {
+    margin: 10px 12px;
+    padding: 8px 12px; border-radius: 6px; background: var(--purple); color: #000;
+    font-weight: 600; display: flex; align-items: center; gap: 8px;
+  }
+  .new-btn .plus { font-size: 14px; }
+  .nav-section { padding: 14px 12px 6px; }
+  .nav-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin-bottom: 6px; padding: 0 4px; }
+  .nav-item {
+    padding: 6px 10px; border-radius: 5px; display: flex; align-items: center; gap: 8px;
+    color: var(--muted); cursor: pointer; font-size: 12.5px;
+  }
+  .nav-item:hover { background: var(--bg-2); color: var(--text); }
+  .nav-item.active { background: var(--purple-bg); color: var(--purple); }
+  .nav-item .icon { width: 14px; opacity: 0.8; }
+  .nav-item .count { margin-left: auto; font-size: 10px; color: var(--dim); }
+
+  .session-list { flex: 1; overflow-y: auto; padding: 4px 8px; }
+  .session {
+    padding: 8px 10px; border-radius: 5px; cursor: pointer; margin-bottom: 2px;
+  }
+  .session:hover { background: var(--bg-2); }
+  .session.active { background: var(--purple-bg); border-left: 2px solid var(--purple); padding-left: 8px; }
+  .session .title { color: var(--text); font-weight: 500; font-size: 12.5px; }
+  .session .meta { color: var(--dim); font-size: 11px; margin-top: 2px; display: flex; gap: 8px; }
+  .session .meta .dot::before { content: "•"; }
+
+  .left-footer { padding: 10px 12px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .avatar { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, var(--blue), var(--pink)); }
+
+  /* ── CENTER: chat / output stream ─────────────────────── */
+  main {
+    background: var(--bg-0); display: flex; flex-direction: column; min-width: 0;
+  }
+  .topbar {
+    height: 48px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 14px; padding: 0 16px;
+    background: rgba(10, 10, 15, 0.85); backdrop-filter: blur(8px);
+  }
+  .breadcrumb { color: var(--muted); font-size: 12.5px; }
+  .breadcrumb b { color: var(--text); font-weight: 600; }
+  .breadcrumb .branch { color: var(--purple); }
+  .topbar-spacer { flex: 1; }
+  .ctx-meter { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); }
+  .ctx-bar { width: 96px; height: 5px; background: var(--bg-2); border-radius: 3px; overflow: hidden; }
+  .ctx-fill { height: 100%; background: var(--green); }
+  .pill { padding: 3px 8px; border-radius: 999px; font-size: 11px; }
+  .pill.free { background: var(--teal-bg); color: var(--teal); border: 1px solid rgba(94,234,212,0.2); }
+  .pill.model { background: var(--bg-2); color: var(--text); border: 1px solid var(--border); font-family: ui-monospace, monospace; font-size: 10.5px; }
+
+  .chat-scroll { flex: 1; overflow-y: auto; padding: 24px 32px 16px; }
+  .session-banner {
+    display: flex; align-items: baseline; gap: 12px; margin-bottom: 28px;
+    padding: 14px 16px; background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px;
+  }
+  .session-banner h2 { font-size: 14px; font-weight: 600; }
+  .session-banner .objective { color: var(--muted); font-size: 13px; }
+  .session-banner .stamp { margin-left: auto; font-size: 11px; color: var(--dim); }
+
+  /* ── chat turn (user message) ──────────────────────────── */
+  .turn { margin-bottom: 18px; max-width: 760px; }
+  .turn.user { margin-left: auto; }
+  .turn.user .bubble {
+    background: var(--purple-bg); border: 1px solid rgba(167,139,250,0.25);
+    border-radius: 12px; padding: 12px 14px;
+  }
+  .turn.assistant .role { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .turn.assistant .role .icon {
+    width: 22px; height: 22px; border-radius: 5px;
+    background: linear-gradient(135deg, var(--purple), var(--teal));
+    display: grid; place-items: center; color: #000; font-weight: 700; font-size: 10px;
+  }
+  .turn.assistant .role .name { font-weight: 600; font-size: 12.5px; }
+  .turn.assistant .role .meta { color: var(--dim); font-size: 11px; margin-left: auto; }
+  .turn.assistant .body { padding-left: 30px; color: #d4d4dc; }
+  .turn.assistant p { margin-bottom: 10px; }
+  .turn.assistant code { background: var(--bg-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+
+  /* ── plan card ─────────────────────────────────────────── */
+  .plan-card { margin: 8px 0 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-1); overflow: hidden; }
+  .plan-head { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: rgba(167,139,250,0.06); }
+  .plan-head .title { font-weight: 600; font-size: 12.5px; }
+  .plan-head .count { color: var(--muted); font-size: 11px; }
+  .plan-head .run-all { margin-left: auto; padding: 4px 10px; border-radius: 5px; background: var(--purple); color: #000; font-weight: 600; font-size: 11px; }
+  .sprint { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start; }
+  .sprint:last-child { border-bottom: none; }
+  .sprint .status { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; margin-top: 1px; }
+  .sprint .status.done { background: rgba(74,222,128,0.15); border: 2px solid var(--green); position: relative; }
+  .sprint .status.done::after { content: "✓"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--green); font-size: 11px; font-weight: 700; }
+  .sprint .status.run { background: rgba(167,139,250,0.15); border: 2px solid var(--purple); animation: spin 1.5s linear infinite; border-right-color: transparent; }
+  .sprint .status.queue { background: var(--bg-2); border: 2px solid var(--border-2); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .sprint .info { flex: 1; min-width: 0; }
+  .sprint .desc { font-size: 12.5px; color: var(--text); }
+  .sprint .crit { color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+  .sprint .crit .met { color: var(--green); }
+  .sprint .crit .pend { color: var(--dim); }
+  .sprint .agent-tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 8px; }
+  .agent-tag.gen { background: rgba(94,234,212,0.12); color: var(--teal); }
+  .agent-tag.eval { background: rgba(251,146,60,0.12); color: var(--orange); }
+
+  /* ── output stream ─────────────────────────────────────── */
+  .stream { font: 11.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin: 6px 0 12px; }
+  .stream .ev { display: flex; gap: 8px; padding: 1px 0; }
+  .stream .ev .ts { color: var(--dim); width: 56px; }
+  .stream .ev .type { color: var(--muted); width: 180px; }
+  .stream .ev .body.green { color: var(--green); }
+  .stream .ev .body.amber { color: var(--amber); }
+  .stream .ev .body.purple { color: var(--purple); }
+  .stream .ev .body.dim { color: var(--dim); }
+  .stream .ev .body.teal { color: var(--teal); }
+  .stream .ev .body.orange { color: var(--orange); }
+
+  /* ── composer ──────────────────────────────────────────── */
+  .composer { padding: 12px 32px 18px; border-top: 1px solid var(--border); background: rgba(10,10,15,0.85); }
+  .composer-meta { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; font-size: 11px; color: var(--dim); }
+  .composer-meta .left { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+  .composer-meta .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .composer-meta .branch-pill { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 5px; background: var(--bg-1); border: 1px solid var(--border); }
+  .diff-stat .add { color: var(--green); }
+  .diff-stat .rem { color: var(--red); }
+
+  .input-wrap {
+    background: var(--bg-1); border: 1px solid var(--border-2); border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .input-wrap:focus-within { border-color: var(--purple); }
+  .input-wrap textarea {
+    width: 100%; background: none; border: none; outline: none;
+    color: var(--text); font: 13px/1.5 inherit; resize: none; min-height: 48px;
+  }
+  .input-wrap textarea::placeholder { color: var(--dim); }
+  .input-toolbar { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .icon-btn { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; color: var(--muted); }
+  .icon-btn:hover { background: var(--bg-2); color: var(--text); }
+  .mode-btn { padding: 4px 10px; border-radius: 6px; color: var(--purple); font-size: 11.5px; font-weight: 500; }
+  .mode-btn:hover { background: var(--purple-bg); }
+  .send-btn {
+    margin-left: auto; padding: 6px 14px; border-radius: 6px;
+    background: var(--purple); color: #000; font-weight: 600; font-size: 12.5px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .send-btn .shortcut { font-size: 10px; opacity: 0.6; }
+  .verbosity { padding: 4px 8px; border-radius: 5px; color: var(--muted); font-size: 11px; }
+
+  /* ── RIGHT PANEL: agents / KB / connectors ──────────────── */
+  aside.right {
+    background: #0d0d12; border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  .right-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .tab { flex: 1; padding: 12px 0; text-align: center; color: var(--muted); font-size: 11.5px; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--text); border-bottom-color: var(--purple); }
+  .right-body { flex: 1; overflow-y: auto; padding: 14px; }
+  .group { margin-bottom: 22px; }
+  .group h3 { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin-bottom: 8px; }
+  .agent-card {
+    background: var(--bg-1); border: 1px solid var(--border); border-radius: 7px;
+    padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; font-size: 12px;
+  }
+  .agent-card .role-icon { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+  .role-icon.planner { background: rgba(96,165,250,0.15); color: var(--blue); }
+  .role-icon.gen { background: rgba(94,234,212,0.15); color: var(--teal); }
+  .role-icon.eval { background: rgba(251,146,60,0.15); color: var(--orange); }
+  .role-icon.review { background: rgba(244,114,182,0.15); color: var(--pink); }
+  .agent-card .info { flex: 1; min-width: 0; }
+  .agent-card .name { font-weight: 600; font-size: 12px; }
+  .agent-card .model { color: var(--dim); font-size: 11px; font-family: ui-monospace, monospace; }
+  .agent-card .live { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 5px var(--green); }
+
+  .kb-item { padding: 8px 10px; border-left: 2px solid var(--border-2); margin-bottom: 6px; font-size: 11.5px; color: var(--muted); }
+  .kb-item:hover { border-left-color: var(--amber); color: var(--text); }
+  .kb-item .topic { color: var(--amber); font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; }
+  .kb-item .conf { font-size: 10px; color: var(--dim); margin-top: 4px; }
+
+  .conn-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; }
+  .conn-row .name { flex: 1; }
+  .conn-row .toggle { width: 28px; height: 16px; background: rgba(74,222,128,0.3); border-radius: 999px; position: relative; }
+  .conn-row .toggle::after { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--green); position: absolute; top: 2px; right: 2px; }
+  .conn-row .toggle.off { background: var(--bg-2); }
+  .conn-row .toggle.off::after { background: var(--dim); right: auto; left: 2px; }
+
+</style>
+</head>
+<body>
+
+  <!-- ╭───────────── LEFT SIDEBAR ─────────────╮ -->
+  <aside class="left">
+    <div class="left-header">
+      <div class="logo">F</div>
+      <div class="brand">Forge</div>
+      <div class="status-dot" title="Daemon connected"></div>
+    </div>
+
+    <button class="new-btn"><span class="plus">+</span> New session</button>
+
+    <div class="nav-section">
+      <div class="nav-title">Workspace</div>
+      <div class="nav-item active"><span class="icon">📁</span> my-webapp <span class="count">14</span></div>
+      <div class="nav-item"><span class="icon">📁</span> ift-platform <span class="count">7</span></div>
+      <div class="nav-item"><span class="icon">📁</span> docs-site <span class="count">3</span></div>
+      <div class="nav-item"><span class="icon">+</span> Add project…</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-title">Recent sessions · my-webapp</div>
+    </div>
+
+    <div class="session-list">
+      <div class="session active">
+        <div class="title">Add user authentication with Supabase RLS</div>
+        <div class="meta"><span>2 min</span><span class="dot"></span><span>4 sprints</span></div>
+      </div>
+      <div class="session">
+        <div class="title">Migrate /api/posts to RSC</div>
+        <div class="meta"><span>3h</span><span class="dot"></span><span>2 sprints</span><span class="dot"></span><span style="color: var(--green)">done</span></div>
+      </div>
+      <div class="session">
+        <div class="title">Stripe webhook handler + tests</div>
+        <div class="meta"><span>yesterday</span><span class="dot"></span><span>3 sprints</span><span class="dot"></span><span style="color: var(--green)">done</span></div>
+      </div>
+      <div class="session">
+        <div class="title">Fix RLS regression on profiles table</div>
+        <div class="meta"><span>2d</span><span class="dot"></span><span>1 sprint</span><span class="dot"></span><span style="color: var(--amber)">revised</span></div>
+      </div>
+      <div class="session">
+        <div class="title">Cookbook: Vercel + Supabase auth flow</div>
+        <div class="meta"><span>4d</span><span class="dot"></span><span>5 sprints</span><span class="dot"></span><span style="color: var(--green)">done</span></div>
+      </div>
+      <div class="session">
+        <div class="title">[critical] schema migration: users.email unique</div>
+        <div class="meta"><span>1w</span><span class="dot"></span><span>3×SC</span><span class="dot"></span><span style="color: var(--green)">done</span></div>
+      </div>
+    </div>
+
+    <div class="left-footer">
+      <div class="avatar"></div>
+      <div>
+        <div style="color: var(--text); font-size: 12px;">Pal Megyes</div>
+        <div style="font-size: 10.5px;">Free · Ollama</div>
+      </div>
+      <div class="icon-btn" style="margin-left: auto;">⚙</div>
+    </div>
+  </aside>
+
+  <!-- ╭───────────── CENTER ─────────────╮ -->
+  <main>
+    <div class="topbar">
+      <div class="breadcrumb">
+        my-webapp <span style="color: var(--dim); margin: 0 6px;">/</span>
+        <b>Add user authentication with Supabase RLS</b>
+        <span style="color: var(--dim); margin: 0 8px;">·</span>
+        <span class="branch">⎇ forge/auth-supabase</span>
+      </div>
+      <div class="topbar-spacer"></div>
+
+      <div class="ctx-meter">
+        <span>Context</span>
+        <div class="ctx-bar"><div class="ctx-fill" style="width: 38%;"></div></div>
+        <span class="mono">48.5k / 128k</span>
+      </div>
+      <span class="pill free">Free · Ollama</span>
+      <span class="pill model">qwen3-coder-next</span>
+    </div>
+
+    <div class="chat-scroll">
+
+      <div class="session-banner">
+        <div>
+          <h2>Session sess-3a8f1b · started 2 min ago</h2>
+          <div class="objective">"Add user authentication with Supabase RLS, login + signup pages, integration tests"</div>
+        </div>
+        <div class="stamp">
+          ↓ 12.4k tokens · 2 sprints done · 1 running · 1 queued
+        </div>
+      </div>
+
+      <!-- USER -->
+      <div class="turn user">
+        <div class="bubble">
+          Add user authentication with Supabase RLS, login &amp; signup pages, integration tests.
+        </div>
+      </div>
+
+      <!-- ASSISTANT plan -->
+      <div class="turn assistant">
+        <div class="role">
+          <div class="icon">F</div>
+          <div class="name">Forge planner</div>
+          <div class="meta">gpt-oss:20b · 1.8s · ↓2.1k tokens</div>
+        </div>
+        <div class="body">
+          <p>Decomposed into 4 sprints with explicit done-criteria. Sprint 1 has no dependencies and runs first; sprints 2 &amp; 3 run in parallel after; sprint 4 (integration tests) waits on all of them.</p>
+
+          <div class="plan-card">
+            <div class="plan-head">
+              <div class="title">Plan</div>
+              <div class="count">4 sprints · ~$0.00 (all free tier)</div>
+              <button class="run-all">▶ Run all</button>
+            </div>
+
+            <div class="sprint">
+              <div class="status done"></div>
+              <div class="info">
+                <div class="desc">Design Supabase schema + RLS policies <span class="agent-tag gen">qwen3-coder-next</span></div>
+                <div class="crit">
+                  <span class="met">✓</span> Tables: users, profiles, posts created<br>
+                  <span class="met">✓</span> RLS policies for authenticated users<br>
+                  <span class="met">✓</span> service_role bypass for admin ops<br>
+                  <span class="met">✓</span> Migration tested
+                </div>
+              </div>
+            </div>
+
+            <div class="sprint">
+              <div class="status run"></div>
+              <div class="info">
+                <div class="desc">Build login + signup pages (Next.js App Router) <span class="agent-tag gen">qwen3.6:27b</span></div>
+                <div class="crit">
+                  <span class="met">✓</span> /login &amp; /signup routes return 200<br>
+                  <span class="met">✓</span> Form validates email + password ≥8 chars<br>
+                  <span class="pend">○</span> Server actions wired to supabase.auth.signInWithPassword<br>
+                  <span class="pend">○</span> Redirect on success → /dashboard
+                </div>
+              </div>
+            </div>
+
+            <div class="sprint">
+              <div class="status queue"></div>
+              <div class="info">
+                <div class="desc">Add session middleware (refresh tokens, RLS context) <span class="agent-tag gen">qwen3-coder-next</span></div>
+                <div class="crit"><span class="pend">○</span> Waits on sprint 1</div>
+              </div>
+            </div>
+
+            <div class="sprint">
+              <div class="status queue"></div>
+              <div class="info">
+                <div class="desc">Integration tests for auth + RLS <span class="agent-tag eval">deepseek-v4-flash · cross-family eval</span></div>
+                <div class="crit"><span class="pend">○</span> Waits on 1, 2, 3</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ASSISTANT — live output stream from sprint 2 -->
+      <div class="turn assistant">
+        <div class="role">
+          <div class="icon">F</div>
+          <div class="name">Sprint 2 — generator</div>
+          <div class="meta">qwen3.6:27b · running · attempt 1 of 3</div>
+        </div>
+        <div class="body">
+          <div class="stream">
+            <div class="ev"><span class="ts">19:11:42</span><span class="type">worktree.created</span><span class="body dim">.forge/worktrees/sprint-2-d8a1</span></div>
+            <div class="ev"><span class="ts">19:11:43</span><span class="type">sprint.attempt</span><span class="body purple">attempt 0</span></div>
+            <div class="ev"><span class="ts">19:11:51</span><span class="type">generator.thinking</span><span class="body dim">Reading app/(auth)/layout.tsx, components/AuthForm.tsx ...</span></div>
+            <div class="ev"><span class="ts">19:12:08</span><span class="type">generator.edit</span><span class="body teal">app/(auth)/login/page.tsx ← 87 lines added</span></div>
+            <div class="ev"><span class="ts">19:12:14</span><span class="type">generator.edit</span><span class="body teal">app/(auth)/signup/page.tsx ← 92 lines added</span></div>
+            <div class="ev"><span class="ts">19:12:19</span><span class="type">generator.edit</span><span class="body teal">app/actions/auth.ts ← 41 lines added (server actions)</span></div>
+            <div class="ev"><span class="ts">19:12:24</span><span class="type">sprint.evaluated</span><span class="body amber">verdict: REVISE — 2 of 4 criteria pending</span></div>
+            <div class="ev"><span class="ts">19:12:25</span><span class="type">sprint.revising</span><span class="body amber">round 1: server actions need redirect on success</span></div>
+            <div class="ev"><span class="ts">19:12:32</span><span class="type">generator.edit</span><span class="body teal">app/actions/auth.ts ← redirect("/dashboard") added</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="composer">
+      <div class="composer-meta">
+        <div class="left"><span>✻</span><span>2m 14s</span><span>·</span><span>↓ 12.4k tokens</span></div>
+        <div class="right">
+          <div class="branch-pill"><span style="color: var(--dim);">⎇</span><span style="color: var(--purple);">forge/auth-supabase</span><span style="color: var(--dim);">←</span><span>main</span></div>
+          <span class="diff-stat"><span class="add">+312</span> <span class="rem">-4</span></span>
+          <button class="mode-btn" style="background: var(--bg-1); border: 1px solid var(--border); color: var(--muted);">Create PR</button>
+        </div>
+      </div>
+
+      <div class="input-wrap">
+        <textarea placeholder="Type / for commands, or describe what you want to build…">Also add a forgot-password flow that emails a magic link via Resend. Same RLS rules apply.</textarea>
+        <div class="input-toolbar">
+          <button class="icon-btn" title="Attach file or photo">📎</button>
+          <button class="icon-btn" title="Add folder">📁</button>
+          <button class="icon-btn" title="Slash commands">/</button>
+          <button class="icon-btn" title="Connectors">◰</button>
+          <button class="icon-btn" title="Voice input">🎤</button>
+          <button class="mode-btn">Auto mode <span style="opacity: 0.5;">▾</span></button>
+          <button class="verbosity">Normal ▾</button>
+          <button class="send-btn">Send <span class="shortcut">⌘↵</span></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ╭───────────── RIGHT PANEL ─────────────╮ -->
+  <aside class="right">
+    <div class="right-tabs">
+      <div class="tab active">Agents</div>
+      <div class="tab">Knowledge</div>
+      <div class="tab">Connectors</div>
+    </div>
+
+    <div class="right-body">
+
+      <div class="group">
+        <h3>Active</h3>
+        <div class="agent-card">
+          <div class="role-icon planner">P</div>
+          <div class="info">
+            <div class="name">Planner</div>
+            <div class="model">gpt-oss:20b · idle</div>
+          </div>
+        </div>
+        <div class="agent-card">
+          <div class="role-icon gen">G</div>
+          <div class="info">
+            <div class="name">Generator · sprint-2</div>
+            <div class="model">qwen3.6:27b · running</div>
+          </div>
+          <div class="live"></div>
+        </div>
+        <div class="agent-card">
+          <div class="role-icon eval">E</div>
+          <div class="info">
+            <div class="name">Evaluator</div>
+            <div class="model">deepseek-v4-flash · waiting</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>KB context injected this turn</h3>
+        <div class="kb-item">
+          <div class="topic">Supabase</div>
+          RLS requires explicit service_role bypass policy; testing with anon key alone misses auth-bypass cases.
+          <div class="conf">conf 0.94 · used 7×</div>
+        </div>
+        <div class="kb-item">
+          <div class="topic">Next.js</div>
+          Server actions need 'use server' directive at file top; redirect() throws — call it last.
+          <div class="conf">conf 0.88 · used 4×</div>
+        </div>
+        <div class="kb-item">
+          <div class="topic">Resend</div>
+          Magic-link emails: include x-entity-ref-id for idempotency; default-from must match verified domain.
+          <div class="conf">conf 0.71 · used 1×</div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Connectors active</h3>
+        <div class="conn-row"><span style="color: var(--green);">●</span><span class="name">supabase-mcp</span><span class="toggle"></span></div>
+        <div class="conn-row"><span style="color: var(--green);">●</span><span class="name">vercel-mcp</span><span class="toggle"></span></div>
+        <div class="conn-row"><span style="color: var(--green);">●</span><span class="name">github</span><span class="toggle"></span></div>
+        <div class="conn-row"><span style="color: var(--dim);">○</span><span class="name">resend</span><span class="toggle off"></span></div>
+        <div class="conn-row"><span style="color: var(--dim);">○</span><span class="name">stripe-mcp</span><span class="toggle off"></span></div>
+      </div>
+
+    </div>
+  </aside>
+
+</body>
+</html>

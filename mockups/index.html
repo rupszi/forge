@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<title>Forge — UI mockups</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-0: #0a0a0f; --bg-1: #12121a; --bg-2: #1a1a24;
+    --border: #1e1e2e; --border-2: #2a2a3a;
+    --text: #e5e5ed; --muted: #6b6b80; --dim: #4a4a5a;
+    --purple: #a78bfa; --teal: #5eead4; --green: #4ade80;
+    --amber: #fbbf24; --blue: #60a5fa;
+  }
+  body {
+    background: var(--bg-0); color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    min-height: 100vh; padding: 48px 32px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  .logo { width: 38px; height: 38px; border-radius: 9px; background: linear-gradient(135deg, var(--purple), var(--teal)); display: grid; place-items: center; color: #000; font-weight: 800; font-size: 16px; }
+  h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.3px; }
+  .sub { color: var(--muted); margin-bottom: 36px; font-size: 14px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .card {
+    background: var(--bg-1); border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; transition: border-color 0.15s;
+  }
+  .card:hover { border-color: var(--purple); }
+  .card a { display: block; color: inherit; text-decoration: none; }
+  .preview {
+    height: 220px; background: var(--bg-0); position: relative; overflow: hidden;
+    display: grid; place-items: center; color: var(--dim); font-size: 12px;
+  }
+  .preview iframe {
+    width: 1280px; height: 800px; transform: scale(0.34); transform-origin: 0 0;
+    border: 0; pointer-events: none; background: var(--bg-0);
+  }
+  .meta { padding: 14px 16px; border-top: 1px solid var(--border); }
+  .meta .num {
+    display: inline-block; font-size: 11px; padding: 2px 8px;
+    background: rgba(167,139,250,0.12); color: var(--purple);
+    border-radius: 4px; font-family: ui-monospace, monospace; margin-right: 8px;
+  }
+  .meta h3 { display: inline; font-size: 14px; font-weight: 600; }
+  .meta p { color: var(--muted); font-size: 12.5px; margin-top: 6px; line-height: 1.5; }
+
+  .footer { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+  .footer code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 12px; color: var(--text); }
+  .footer a { color: var(--purple); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo">F</div>
+    <div>
+      <h1>Forge — UI mockups</h1>
+    </div>
+  </header>
+  <div class="sub">Five clickable HTML designs of the Forge desktop experience. Open any one to see it full-size; the layout adapts to your viewport.</div>
+
+  <div class="grid">
+
+    <div class="card">
+      <a href="01-main-chat.html">
+        <div class="preview"><iframe src="01-main-chat.html"></iframe></div>
+        <div class="meta">
+          <span class="num">01</span><h3>Main chat — in-session</h3>
+          <p>Three-column dashboard: project + sessions sidebar, central chat with planner output and live sprint sub-cards, agents panel on the right. Top bar: context-window meter, free/Ollama tier badge, model. Composer with attach menu, slash commands, mode picker, transcript verbosity, Create-PR.</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="card">
+      <a href="02-empty-state.html">
+        <div class="preview"><iframe src="02-empty-state.html"></iframe></div>
+        <div class="meta">
+          <span class="num">02</span><h3>New session — empty state</h3>
+          <p>Welcome screen with hero composer, suggestion chips (fix bug, new feature, add tests, refactor, …), four example prompt cards seeded for the user's stack, and the slash-command palette demo expanded.</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="card">
+      <a href="03-merge-gate.html">
+        <div class="preview"><iframe src="03-merge-gate.html"></iframe></div>
+        <div class="meta">
+          <span class="num">03</span><h3>Merge gate — diff review</h3>
+          <p>File-tree on the left grouped by sprint, syntax-highlighted diff in the middle, evaluator's per-criterion verdict + multi-perspective review (security/correctness/performance) on the right. "Approve & merge" + "Reject selected" actions. Knowledge-extraction prompt at bottom.</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="card">
+      <a href="04-wizard.html">
+        <div class="preview"><iframe src="04-wizard.html"></iframe></div>
+        <div class="meta">
+          <span class="num">04</span><h3>First-run wizard</h3>
+          <p>Detected stack at top (next, supabase, stripe, github), already-configured connectors auto-checked, suggested connectors based on stack signals. Anti-corruption contract callout at the bottom. Step 2 of 4 progress.</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="card">
+      <a href="05-knowledge-base.html">
+        <div class="preview"><iframe src="05-knowledge-base.html"></iframe></div>
+        <div class="meta">
+          <span class="num">05</span><h3>Knowledge base browser</h3>
+          <p>Three-pane KB browser: project nav, faceted filters (category × topic × source × confidence), and the result list with confidence bars, usage counters, source provenance, and inline edit / delete / inspect actions. Stats row up top.</p>
+        </div>
+      </a>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    These mockups live at <code>mockups/</code> in the repo. Open <code>mockups/index.html</code> in any browser; or hand each individual file straight to a designer / contributor for review. They use the same design tokens as the existing Next.js dashboard at <code>ui/</code>, so anything we accept in mockups translates directly.
+  </div>
+
+</div>
+</body>
+</html>

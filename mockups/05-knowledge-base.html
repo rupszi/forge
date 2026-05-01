@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<title>Forge — Knowledge base</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-0: #0a0a0f; --bg-1: #12121a; --bg-2: #1a1a24;
+    --border: #1e1e2e; --border-2: #2a2a3a;
+    --text: #e5e5ed; --muted: #6b6b80; --dim: #4a4a5a;
+    --purple: #a78bfa; --teal: #5eead4;
+    --green: #4ade80; --amber: #fbbf24; --red: #f87171; --orange: #fb923c;
+    --blue: #60a5fa; --pink: #f472b6;
+  }
+  body {
+    background: var(--bg-0); color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    height: 100vh; display: grid; grid-template-columns: 240px 240px 1fr; overflow: hidden;
+  }
+  button { background: none; border: none; color: inherit; cursor: pointer; font: inherit; }
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  /* sidebar */
+  aside.left { background: #0d0d12; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .lh { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .logo { width: 22px; height: 22px; border-radius: 5px; background: linear-gradient(135deg, var(--purple), var(--teal)); display: grid; place-items: center; color: #000; font-weight: 700; font-size: 11px; }
+  .brand { font-weight: 600; }
+  .nav-section { padding: 14px 12px 6px; }
+  .nav-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin-bottom: 6px; padding: 0 4px; }
+  .nav-item { padding: 6px 10px; border-radius: 5px; display: flex; align-items: center; gap: 8px; color: var(--muted); cursor: pointer; font-size: 12.5px; }
+  .nav-item:hover { background: var(--bg-2); color: var(--text); }
+  .nav-item.active { background: rgba(167,139,250,0.12); color: var(--purple); }
+  .nav-item .count { margin-left: auto; font-size: 10px; color: var(--dim); }
+
+  /* MIDDLE: filter / topic list */
+  aside.filters { background: #0d0d12; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .f-head { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .f-head h2 { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .search-input {
+    width: 100%; background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 10px; color: var(--text); font: inherit; font-size: 12px; outline: none;
+  }
+  .search-input:focus { border-color: var(--purple); }
+  .f-body { flex: 1; overflow-y: auto; padding: 10px 8px; }
+  .f-section { padding: 0 8px 16px; }
+  .f-section h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin-bottom: 6px; padding: 0 4px; }
+  .f-row { padding: 5px 8px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .f-row:hover { background: var(--bg-2); color: var(--text); }
+  .f-row.active { color: var(--text); background: rgba(167,139,250,0.1); }
+  .f-row .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .dot.gotcha { background: var(--amber); }
+  .dot.solution { background: var(--green); }
+  .dot.pattern { background: var(--blue); }
+  .dot.rule { background: var(--purple); }
+  .dot.preference { background: var(--pink); }
+  .f-row .count { margin-left: auto; font-size: 10.5px; color: var(--dim); }
+
+  /* MAIN: KB list */
+  main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar { height: 48px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 12px; }
+  .topbar h1 { font-size: 14px; font-weight: 600; }
+  .topbar .sub { color: var(--muted); font-size: 12px; }
+  .topbar-spacer { flex: 1; }
+  .ghost-btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-2); color: var(--muted); font-size: 12px; }
+  .ghost-btn:hover { color: var(--text); border-color: var(--purple); }
+  .add-btn { padding: 7px 14px; border-radius: 6px; background: var(--purple); color: #000; font-weight: 600; font-size: 12px; }
+
+  .stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+  }
+  .stat-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+  .stat-card .v { font-size: 18px; font-weight: 700; }
+  .stat-card .v.up { color: var(--green); }
+  .stat-card .l { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+  .kb-list { flex: 1; overflow-y: auto; padding: 14px 20px 24px; }
+
+  .kb-card {
+    background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .kb-card:hover { border-color: var(--border-2); }
+  .kb-card .head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .kb-card .topic-pill {
+    padding: 2px 8px; border-radius: 4px; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600;
+  }
+  .topic-pill.supabase { background: rgba(74,222,128,0.12); color: var(--green); }
+  .topic-pill.next { background: rgba(96,165,250,0.12); color: var(--blue); }
+  .topic-pill.testing { background: rgba(244,114,182,0.12); color: var(--pink); }
+  .topic-pill.security { background: rgba(167,139,250,0.12); color: var(--purple); }
+  .topic-pill.routing { background: rgba(94,234,212,0.12); color: var(--teal); }
+  .topic-pill.stripe { background: rgba(251,146,60,0.12); color: var(--orange); }
+
+  .kb-card .cat-pill {
+    padding: 2px 8px; border-radius: 4px; font-size: 10px;
+    background: var(--bg-2); color: var(--muted);
+  }
+  .kb-card .head .source { color: var(--dim); font-size: 11px; margin-left: auto; font-family: ui-monospace, monospace; }
+  .kb-card .body { font-size: 13px; color: var(--text); line-height: 1.5; padding: 6px 0; }
+  .kb-card .meta-row { display: flex; align-items: center; gap: 14px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted); }
+  .conf-bar { display: flex; align-items: center; gap: 6px; }
+  .conf-bar .bar { width: 60px; height: 4px; background: var(--bg-2); border-radius: 3px; overflow: hidden; }
+  .conf-bar .fill { height: 100%; }
+  .fill.high { background: var(--green); }
+  .fill.med { background: var(--amber); }
+  .fill.low { background: var(--red); }
+  .meta-spacer { flex: 1; }
+  .meta-act { color: var(--dim); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  .meta-act:hover { color: var(--text); background: var(--bg-2); }
+  .conf-tag { font-family: ui-monospace, monospace; font-size: 11px; }
+
+</style>
+</head>
+<body>
+
+  <aside class="left">
+    <div class="lh">
+      <div class="logo">F</div>
+      <div class="brand">Forge</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-title">Workspace</div>
+      <div class="nav-item">📁 my-webapp <span class="count">14</span></div>
+      <div class="nav-item">📁 ift-platform <span class="count">7</span></div>
+      <div class="nav-item">📁 docs-site <span class="count">3</span></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-title">Browse</div>
+      <div class="nav-item">💬 Sessions <span class="count">42</span></div>
+      <div class="nav-item active">📚 Knowledge <span class="count">187</span></div>
+      <div class="nav-item">🧩 Connectors <span class="count">8</span></div>
+      <div class="nav-item">🛠 Skills <span class="count">3</span></div>
+      <div class="nav-item">🤖 LLMs <span class="count">5</span></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-title">Settings</div>
+      <div class="nav-item">⚙ Preferences</div>
+      <div class="nav-item">🔐 Permissions</div>
+      <div class="nav-item">📊 Activity</div>
+    </div>
+  </aside>
+
+  <aside class="filters">
+    <div class="f-head">
+      <h2>Knowledge base</h2>
+      <input class="search-input" placeholder="Search content, topic, source…" value="rls">
+    </div>
+    <div class="f-body">
+
+      <div class="f-section">
+        <h3>Category</h3>
+        <div class="f-row active"><span class="dot gotcha"></span>Gotcha<span class="count">82</span></div>
+        <div class="f-row"><span class="dot solution"></span>Solution<span class="count">54</span></div>
+        <div class="f-row"><span class="dot pattern"></span>Pattern<span class="count">31</span></div>
+        <div class="f-row"><span class="dot rule"></span>Rule<span class="count">14</span></div>
+        <div class="f-row"><span class="dot preference"></span>Preference<span class="count">6</span></div>
+      </div>
+
+      <div class="f-section">
+        <h3>Topic</h3>
+        <div class="f-row active">supabase<span class="count">28</span></div>
+        <div class="f-row">next.js<span class="count">22</span></div>
+        <div class="f-row">testing<span class="count">19</span></div>
+        <div class="f-row">security<span class="count">17</span></div>
+        <div class="f-row">routing<span class="count">12</span></div>
+        <div class="f-row">stripe<span class="count">9</span></div>
+        <div class="f-row">deploy<span class="count">8</span></div>
+        <div class="f-row">+ 23 more…<span class="count"></span></div>
+      </div>
+
+      <div class="f-section">
+        <h3>Source</h3>
+        <div class="f-row">learned<span class="count">142</span></div>
+        <div class="f-row">research<span class="count">28</span></div>
+        <div class="f-row">user<span class="count">11</span></div>
+        <div class="f-row">claude-memory<span class="count">6</span></div>
+      </div>
+
+      <div class="f-section">
+        <h3>Confidence</h3>
+        <div class="f-row">high (≥0.8)<span class="count">98</span></div>
+        <div class="f-row">medium<span class="count">71</span></div>
+        <div class="f-row">low (&lt;0.4)<span class="count">18</span></div>
+      </div>
+
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <h1>Knowledge base</h1>
+      <div class="sub">187 items · scoped to <span style="color: var(--text);">my-webapp</span></div>
+      <div class="topbar-spacer"></div>
+      <button class="ghost-btn">↑ Import from claude-memory</button>
+      <button class="ghost-btn">⤓ Export</button>
+      <button class="add-btn">+ Add knowledge</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="v">187</div>
+        <div class="l">Total items</div>
+      </div>
+      <div class="stat-card">
+        <div class="v up">+12</div>
+        <div class="l">This week</div>
+      </div>
+      <div class="stat-card">
+        <div class="v">94%</div>
+        <div class="l">Mean confidence</div>
+      </div>
+      <div class="stat-card">
+        <div class="v">432</div>
+        <div class="l">Times applied (30d)</div>
+      </div>
+    </div>
+
+    <div class="kb-list">
+
+      <div class="kb-card">
+        <div class="head">
+          <span class="topic-pill supabase">supabase</span>
+          <span class="cat-pill">gotcha</span>
+          <span class="source">learned: sess-3a8f1b · 2m ago</span>
+        </div>
+        <div class="body">
+          RLS policies require explicit <code style="background: var(--bg-2); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, monospace; font-size: 12px;">service_role</code> bypass for admin operations. Testing with the anon key alone misses auth-bypass cases — use the service_role key for testing migrations and admin scripts.
+        </div>
+        <div class="meta-row">
+          <div class="conf-bar"><span class="conf-tag">conf 0.94</span><div class="bar"><div class="fill high" style="width: 94%;"></div></div></div>
+          <span>used 7×</span>
+          <span>helpful 7×</span>
+          <div class="meta-spacer"></div>
+          <button class="meta-act">↗ Inspect</button>
+          <button class="meta-act">✎ Edit</button>
+          <button class="meta-act">🗑 Delete</button>
+        </div>
+      </div>
+
+      <div class="kb-card">
+        <div class="head">
+          <span class="topic-pill supabase">supabase</span>
+          <span class="cat-pill">pattern</span>
+          <span class="source">learned: sess-c0f421 · 4d ago</span>
+        </div>
+        <div class="body">
+          When changing RLS policies, always run a regression test that asserts <i>both</i> the affirmative case (user can read own row) and the negative case (user cannot read other rows). Forge has a <code>scripts/test_rls.ts</code> helper for this.
+        </div>
+        <div class="meta-row">
+          <div class="conf-bar"><span class="conf-tag">conf 0.88</span><div class="bar"><div class="fill high" style="width: 88%;"></div></div></div>
+          <span>used 4×</span>
+          <span>helpful 4×</span>
+          <div class="meta-spacer"></div>
+          <button class="meta-act">↗ Inspect</button>
+          <button class="meta-act">✎ Edit</button>
+          <button class="meta-act">🗑 Delete</button>
+        </div>
+      </div>
+
+      <div class="kb-card">
+        <div class="head">
+          <span class="topic-pill next">next.js</span>
+          <span class="cat-pill">gotcha</span>
+          <span class="source">learned: sess-77b2d9 · 1w ago</span>
+        </div>
+        <div class="body">
+          Server actions must declare <code>"use server"</code> at the top of the file. <code>redirect()</code> from <code>next/navigation</code> throws a special exception — call it last in the action body.
+        </div>
+        <div class="meta-row">
+          <div class="conf-bar"><span class="conf-tag">conf 0.91</span><div class="bar"><div class="fill high" style="width: 91%;"></div></div></div>
+          <span>used 9×</span>
+          <span>helpful 9×</span>
+          <div class="meta-spacer"></div>
+          <button class="meta-act">↗ Inspect</button>
+          <button class="meta-act">✎ Edit</button>
+          <button class="meta-act">🗑 Delete</button>
+        </div>
+      </div>
+
+      <div class="kb-card">
+        <div class="head">
+          <span class="topic-pill testing">testing</span>
+          <span class="cat-pill">rule</span>
+          <span class="source">user · pinned</span>
+        </div>
+        <div class="body">
+          Integration tests must use a real database. Mocked Postgres (pg-mem, msw) silently passes in CI but breaks on schema changes. Spin up a Supabase test instance via <code>supabase start</code>.
+        </div>
+        <div class="meta-row">
+          <div class="conf-bar"><span class="conf-tag">conf 1.00</span><div class="bar"><div class="fill high" style="width: 100%;"></div></div></div>
+          <span style="color: var(--purple);">📌 pinned</span>
+          <span>applied 12×</span>
+          <div class="meta-spacer"></div>
+          <button class="meta-act">↗ Inspect</button>
+          <button class="meta-act">✎ Edit</button>
+          <button class="meta-act">🗑 Delete</button>
+        </div>
+      </div>
+
+      <div class="kb-card">
+        <div class="head">
+          <span class="topic-pill stripe">stripe</span>
+          <span class="cat-pill">solution</span>
+          <span class="source">research: stripe.com/docs · 2w ago</span>
+        </div>
+        <div class="body">
+          Webhook idempotency: include <code>x-entity-ref-id</code> on outbound retries; Stripe deduplicates within a 24h window. Persist event IDs in your DB before processing to handle replays.
+        </div>
+        <div class="meta-row">
+          <div class="conf-bar"><span class="conf-tag">conf 0.71</span><div class="bar"><div class="fill med" style="width: 71%;"></div></div></div>
+          <span>used 1×</span>
+          <span>helpful 1×</span>
+          <div class="meta-spacer"></div>
+          <button class="meta-act">↗ Inspect</button>
+          <button class="meta-act">✎ Edit</button>
+          <button class="meta-act">🗑 Delete</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</body>
+</html>

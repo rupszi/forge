@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<title>Forge — First-run wizard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-0: #0a0a0f; --bg-1: #12121a; --bg-2: #1a1a24;
+    --border: #1e1e2e; --border-2: #2a2a3a;
+    --text: #e5e5ed; --muted: #6b6b80; --dim: #4a4a5a;
+    --purple: #a78bfa; --teal: #5eead4;
+    --green: #4ade80; --amber: #fbbf24; --red: #f87171;
+    --blue: #60a5fa; --pink: #f472b6;
+  }
+  body {
+    background: var(--bg-0); color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    min-height: 100vh; display: grid; place-items: center; padding: 32px;
+  }
+  button { background: none; border: none; color: inherit; cursor: pointer; font: inherit; }
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  .wizard {
+    width: 100%; max-width: 760px;
+    background: var(--bg-1); border: 1px solid var(--border-2); border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+  }
+  .wiz-head {
+    padding: 24px 28px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 14px;
+  }
+  .logo { width: 38px; height: 38px; border-radius: 9px; background: linear-gradient(135deg, var(--purple), var(--teal)); display: grid; place-items: center; color: #000; font-weight: 800; font-size: 16px; }
+  .wiz-head h1 { font-size: 18px; font-weight: 600; }
+  .wiz-head .sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .wiz-head .step { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+
+  /* progress bar */
+  .progress { display: flex; gap: 4px; padding: 12px 28px; background: rgba(167,139,250,0.04); border-bottom: 1px solid var(--border); }
+  .progress .seg { flex: 1; height: 3px; border-radius: 2px; background: var(--border); }
+  .progress .seg.done { background: var(--green); }
+  .progress .seg.cur { background: var(--purple); }
+
+  .body { padding: 24px 28px; }
+  .body h2 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .body .lede { color: var(--muted); font-size: 12.5px; margin-bottom: 20px; line-height: 1.55; }
+
+  /* Detected stack section */
+  .detected {
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 22px;
+  }
+  .detected .row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12.5px; }
+  .detected .row:last-child { margin-bottom: 0; }
+  .detected .label { color: var(--dim); width: 96px; font-size: 11.5px; }
+  .detected .v { color: var(--text); }
+  .detected .v .pill {
+    padding: 2px 7px; border-radius: 4px; font-size: 10.5px;
+    background: rgba(167,139,250,0.12); color: var(--purple); margin-right: 4px;
+    font-family: ui-monospace, monospace;
+  }
+  .detected .v .pill.green { background: rgba(74,222,128,0.12); color: var(--green); }
+  .detected .v .pill.teal { background: rgba(94,234,212,0.12); color: var(--teal); }
+
+  /* Connector list */
+  h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 18px 0 10px; }
+  .conn-card {
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 8px;
+    display: flex; align-items: flex-start; gap: 12px;
+  }
+  .conn-card .check {
+    width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; margin-top: 2px;
+    background: var(--bg-0); border: 1.5px solid var(--border-2); cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .conn-card.checked .check { background: var(--purple); border-color: var(--purple); color: #000; font-weight: 700; font-size: 11px; }
+  .conn-card.checked .check::after { content: "✓"; }
+  .conn-card .info { flex: 1; min-width: 0; }
+  .conn-card .head { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+  .conn-card .name { font-weight: 600; font-size: 13px; }
+  .conn-card .badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; }
+  .badge.detected { background: rgba(74,222,128,0.12); color: var(--green); }
+  .badge.suggested { background: rgba(96,165,250,0.12); color: var(--blue); }
+  .badge.exists { background: rgba(94,234,212,0.12); color: var(--teal); }
+  .conn-card .body { color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .conn-card .req {
+    margin-top: 6px; font-family: ui-monospace, monospace; font-size: 11px;
+    color: var(--dim);
+  }
+  .conn-card .req b { color: var(--amber); }
+
+  /* footer */
+  .wiz-foot {
+    padding: 14px 28px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; background: rgba(10,10,15,0.4);
+  }
+  .skip-btn { color: var(--muted); font-size: 12.5px; }
+  .skip-btn:hover { color: var(--text); }
+  .wiz-foot .spacer { flex: 1; }
+  .ghost-btn { padding: 7px 14px; border-radius: 7px; border: 1px solid var(--border-2); color: var(--text); font-size: 12.5px; }
+  .next-btn { padding: 8px 16px; border-radius: 7px; background: var(--purple); color: #000; font-weight: 600; font-size: 12.5px; }
+
+  /* contract callout */
+  .contract {
+    margin-top: 20px; padding: 12px 14px;
+    border-left: 3px solid var(--green); background: rgba(74,222,128,0.04);
+    border-radius: 0 8px 8px 0; font-size: 12px; color: var(--muted);
+  }
+  .contract b { color: var(--green); }
+  .contract code { background: var(--bg-2); padding: 1px 5px; border-radius: 3px; color: var(--text); font-family: ui-monospace, monospace; font-size: 11.5px; }
+
+</style>
+</head>
+<body>
+
+  <div class="wizard">
+
+    <div class="wiz-head">
+      <div class="logo">F</div>
+      <div>
+        <h1>Welcome to Forge</h1>
+        <div class="sub">Let's connect Forge to the tools your project already uses.</div>
+      </div>
+      <div class="step">Step 2 of 4</div>
+    </div>
+
+    <div class="progress">
+      <div class="seg done"></div>
+      <div class="seg cur"></div>
+      <div class="seg"></div>
+      <div class="seg"></div>
+    </div>
+
+    <div class="body">
+
+      <h2>Detected your stack</h2>
+      <div class="lede">Forge scanned <code style="background: var(--bg-2); padding: 1px 5px; border-radius: 3px; font-family: ui-monospace, monospace; font-size: 11.5px;">my-webapp/</code> and found these signals — the suggestions below are filtered to match.</div>
+
+      <div class="detected">
+        <div class="row">
+          <span class="label">Stack</span>
+          <span class="v"><span class="pill">next 14.2</span><span class="pill">supabase</span><span class="pill">stripe</span><span class="pill">vitest</span></span>
+        </div>
+        <div class="row">
+          <span class="label">Git</span>
+          <span class="v"><span class="pill teal">github.com/palmegyes/my-webapp</span> · branch <span class="mono" style="color: var(--purple);">main</span></span>
+        </div>
+        <div class="row">
+          <span class="label">CLAUDE.md</span>
+          <span class="v"><span class="pill green">found</span> · 3 .claude/rules/*.md inherited</span>
+        </div>
+        <div class="row">
+          <span class="label">MCP servers</span>
+          <span class="v"><span class="pill teal">github</span><span class="pill teal">supabase</span> from .claude/settings.json</span>
+        </div>
+      </div>
+
+      <h3>Already configured · enable in Forge</h3>
+
+      <div class="conn-card checked">
+        <div class="check"></div>
+        <div class="info">
+          <div class="head">
+            <span class="name">github</span>
+            <span class="badge exists">found in .claude/settings.json</span>
+          </div>
+          <div class="body">Issues, PRs, CI status, code search. No re-config needed — Forge will inherit your existing MCP setup.</div>
+        </div>
+      </div>
+
+      <div class="conn-card checked">
+        <div class="check"></div>
+        <div class="info">
+          <div class="head">
+            <span class="name">supabase</span>
+            <span class="badge exists">found in .claude/settings.json</span>
+          </div>
+          <div class="body">Schema operations, RLS policies, edge functions, migrations.</div>
+        </div>
+      </div>
+
+      <h3>Suggested for your stack</h3>
+
+      <div class="conn-card checked">
+        <div class="check"></div>
+        <div class="info">
+          <div class="head">
+            <span class="name">vercel</span>
+            <span class="badge detected">vercel.json detected</span>
+          </div>
+          <div class="body">Trigger deploys, read deployment logs, sync env vars.</div>
+          <div class="req">Needs <b>VERCEL_TOKEN</b> in your shell env. Get one: vercel.com/account/tokens</div>
+        </div>
+      </div>
+
+      <div class="conn-card checked">
+        <div class="check"></div>
+        <div class="info">
+          <div class="head">
+            <span class="name">stripe</span>
+            <span class="badge detected">stripe in package.json</span>
+          </div>
+          <div class="body">Customer / subscription management, charge inspection, webhooks.</div>
+          <div class="req">Needs <b>STRIPE_API_KEY</b>. Get one: dashboard.stripe.com/apikeys</div>
+        </div>
+      </div>
+
+      <div class="conn-card">
+        <div class="check"></div>
+        <div class="info">
+          <div class="head">
+            <span class="name">resend</span>
+            <span class="badge suggested">common with next.js</span>
+          </div>
+          <div class="body">Send transactional email; magic-link flows.</div>
+          <div class="req">Needs <b>RESEND_API_KEY</b>. Get one: resend.com/api-keys</div>
+        </div>
+      </div>
+
+      <div class="conn-card">
+        <div class="check"></div>
+        <div class="info">
+          <div class="head">
+            <span class="name">linear</span>
+            <span class="badge suggested">optional</span>
+          </div>
+          <div class="body">Issue tracking, project planning, cycle management.</div>
+        </div>
+      </div>
+
+      <div class="contract">
+        <b>What Forge does to your project:</b>
+        Writes <b>only</b> to <code>.forge/</code>. Adds one line to <code>.gitignore</code>. Never edits source files outside an isolated worktree branch you review at the merge gate. <b>Zero telemetry.</b> The KB stays in <code>.forge/forge.db</code> on this machine.
+      </div>
+
+    </div>
+
+    <div class="wiz-foot">
+      <button class="skip-btn">Skip — set up later via /wizard</button>
+      <div class="spacer"></div>
+      <button class="ghost-btn">← Back</button>
+      <button class="next-btn">Continue → 4 connectors</button>
+    </div>
+
+  </div>
+
+</body>
+</html>
