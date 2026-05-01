@@ -33,12 +33,14 @@ CLI entry points (in cli.py):
 
 from __future__ import annotations
 
+from .dispatch import DispatchResult, dispatch_plugin
 from .lethal_trifecta import is_blocked_combination
 from .lock import LockEntry, PluginsLock, SkillTampered, default_lock_path
 from .registry import SkillEntry, SkillManifest, load_skill
 from .runtime import SandboxResult, run_skill
 
 __all__ = [
+    "DispatchResult",
     "LockEntry",
     "PluginsLock",
     "SandboxResult",
@@ -46,6 +48,7 @@ __all__ = [
     "SkillManifest",
     "SkillTampered",
     "default_lock_path",
+    "dispatch_plugin",
     "is_blocked_combination",
     "load_skill",
     "run_skill",

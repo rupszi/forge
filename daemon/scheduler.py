@@ -48,6 +48,13 @@ from .memory.retriever import Retriever
 from .models import EvaluatorResult, ExecutionResult, ProjectContext, Session, SprintContract
 from .scanner.repomap import build_repomap
 
+# The plugin dispatcher is intentionally re-exported here so callers in the
+# agent loop / generator hooks reach for ``daemon.scheduler.dispatch_plugin``
+# alongside the rest of the sprint-execution surface. Importing from this
+# module rather than ``daemon.skills`` makes the wiring intention explicit:
+# plugin invocations are part of sprint execution, not a side channel.
+from .skills import DispatchResult, dispatch_plugin  # noqa: F401  # re-export
+
 logger = logging.getLogger(__name__)
 
 
