@@ -255,9 +255,24 @@ async def _handle_message_inner(
         names = [e.manifest.name for e in list_llms()]
         return {"type": "llms_list", "names": names}
 
-    if msg_type in ("slash.help", "slash.clear"):
-        # Pure UI-side commands echoed back; client handles them.
-        return {"type": "slash_ack", "command": msg_type}
+    if msg_type.startswith("slash."):
+        # Sprint 6.3: real handlers in daemon/slash.py. Each command
+        # is a small async callable registered in slash.HANDLERS;
+        # dispatch_slash returns the response dict directly. Unknown
+        # slash commands surface a clear error instead of falling
+        # through to the generic "unknown message type" path so the UI
+        # can distinguish typos from genuinely unsupported messages.
+        from .slash import SlashContext, dispatch_slash
+
+        slash_ctx = SlashContext(
+            db=db,
+            budget=budget,
+            mode_state=_mode_state,
+            kb=kb,
+        )
+        result = await dispatch_slash(msg_type, msg.get("args", ""), slash_ctx)
+        if result is not None:
+            return result
 
     if msg_type == "wizard":
         # The CLI handles the interactive wizard; from the browser we just
