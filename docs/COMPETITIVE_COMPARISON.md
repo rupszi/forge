@@ -409,6 +409,67 @@ If any of these happen during the build, Forge's positioning erodes:
 
 ---
 
+## 2026-05-01 deep-dive addendum: OpenClaw, Ruflo, and the top-5 GitHub field
+
+This section synthesizes two independent research sweeps performed on 2026-05-01 to ground-truth the differentiation story against the most-starred / most-active competitors.
+
+### Forge vs OpenClaw (the multi-agent council plugin for Claude Code)
+
+**OpenClaw** here = `Enderfga/openclaw-claude-code` (~417 stars, 64 forks, 6 contributors, MIT, last push 2026-04-29). The much larger `openclaw/openclaw` repo is a different product (chat-channel personal-AI gateway). All comparison below is against the plugin.
+
+OpenClaw is a TypeScript/Node plugin that wraps coding CLIs (Claude Code, OpenAI Codex, Gemini CLI, Cursor Agent, custom) behind a unified `ISession` interface and exposes 27 tools (session lifecycle, inbox, council, ultraplan, ultrareview) plus an OpenAI-compatible HTTP server at `:18796`. Its headline feature is the **Multi-Agent Council**: 3+ agents work in parallel on the same codebase, each in its own git worktree, voting `[CONSENSUS: YES/NO]` after every round in a two-phase plan-then-execute protocol. Released v2.14.1 with weekly cadence; 0 open issues, actively maintained.
+
+| Dimension | Forge | OpenClaw |
+|---|---|---|
+| License | MIT | MIT |
+| Language | Python 3, asyncio, 2 deps | TypeScript / Node 22+ |
+| Topology | Planner → Generator → **external** Evaluator (asymmetric, 3 roles) | N agents (default 3) **symmetric** with consensus voting |
+| Verification model | Cross-family Evaluator on a *different* model, grades each done-criterion independently | Unanimous `[CONSENSUS: YES]` voting; peer-review APPROVE/REQUEST_CHANGES |
+| Worktree isolation | First-class | First-class |
+| Persistent memory | 4-tier SQLite (knowledge / episodic / procedural / research) with confidence + decay | None documented; 7-day on-disk session TTL only |
+| Open-weight default | Yes — Ollama (gpt-oss, qwen3-coder-next, deepseek-v4-flash) | No — Claude / Codex / Gemini / Cursor (all hosted) |
+| MCP integration | Bidirectional: consumes `.claude/settings.json` AND exposes KB as MCP server | One-way: it *is* consumed via Claude Code plugin protocol |
+| Sandbox | 5-layer credential redaction, destructive-op classifier, no `shell=True` | `bypassPermissions` is the documented default; per-agent overrides |
+| Surface | Browser dashboard at `localhost:3000` + CLI | 27 programmatic tools + OpenAI-compat HTTP server, no first-party UI |
+| Done-criteria contracts | Yes — explicit JSON contract per sprint, per-criterion PASS/FAIL with evidence | Implicit — peer-review approval, no per-criterion evidence schema |
+| Engine breadth | Claude Code + Ollama | Claude / Codex / Gemini / Cursor / custom |
+| Maturity | Pre-v1 | v2.14.x, ~weekly releases, 6 contributors |
+
+**Where Forge wins:** persistent compounding memory; open-weight default; asymmetric harness (generator never self-judges; evaluator runs on a *different* family — directly addresses the harness-paper failure mode that voting-based councils don't solve); done-criteria contracts; bidirectional MCP; security depth (no `bypassPermissions` default); browser dashboard.
+
+**Where OpenClaw wins:** engine breadth (4 hosted CLIs out of the box); maturity / velocity (v2.14.x vs pre-v1); OpenAI-compat HTTP surface lets any frontend (Open WebUI, LobeChat) drive it; Ultraplan / Ultrareview features Forge does not have; cross-session inbox with `*` broadcast.
+
+**Coexistence:** yes — they are largely orthogonal. OpenClaw is a plugin/CLI surface; Forge is a daemon + dashboard. Both can run in the same project; Forge can call OpenClaw tools via MCP; namespace worktrees (`forge-<id>` vs `council/<agent>`) to avoid collisions.
+
+### Forge vs Ruflo (the multi-agent swarm orchestrator)
+
+**Ruflo** = `ruvnet/ruflo` — formerly "Claude Flow" (~34.4k stars, 21 contributors, MIT, TypeScript+Rust WASM, last push 2026-04-30). The "Ruflow" spelling in dev.to / TikTok writeups maps to this canonical repo.
+
+Ruflo is a multi-agent orchestration platform that turns Claude Code (or Codex) into a swarm of 60+ pre-built specialized agents (researcher, coder, tester, security reviewer, DevOps, data analyst). Decomposes a task, fans subtasks across agents using swarm topologies (mesh / hierarchical / pipeline), runs them in parallel with shared memory, and merges results. Headline claims: 75% Claude API cost reduction via tier routing, 84.8% on SWE-Bench. Architecture: TypeScript orchestrator over Claude Code/Codex CLIs + WASM kernels in Rust for policy engine, embeddings, proof system. v3.5.0 graduated to production after "10 months, 5,800+ commits, 55 alpha iterations."
+
+**Where Forge wins vs Ruflo:** open-weight default (Ruflo is Claude/Codex-only at the LLM layer); cross-family evaluator (Ruflo's swarm is symmetric; agents grade peers); Forge's evaluator is on a *different* model family by mandate; done-criteria contracts vs vote-based approval; git-worktree-per-sprint isolation as first-class (Ruflo is in-tree swarm); bidirectional MCP; runs without an Anthropic key.
+
+**Where Ruflo wins vs Forge:** 60+ pre-built role agents (Forge has 3 roles); swarm topologies (mesh/hierarchical/pipeline) — Forge has dependency waves but not topology variety; federated cross-machine swarms with trust boundaries; mature production claims (84.8% SWE-Bench public number Forge has not yet matched); much larger community + mindshare.
+
+### Forge vs the top-5 most-active GitHub field (2026-05-01 snapshot)
+
+| Repo | Stars | License | One-line | Forge wins | They win |
+|---|---|---|---|---|---|
+| **OpenHands** (All-Hands-AI) | ~72.4k | NOASSERTION | Open platform for AI software-developer agents; ICLR 2025 paper; Docker-sandboxed runtime | git-worktree (lighter than full Docker), planner→generator→cross-family evaluator, 4-tier KB, sprint contracts | huge community, formal paper, mature Docker isolation, browser automation |
+| **opencode** (anomalyco) | ~152.8k | MIT | Open-source coding agent; client/server; deep MCP integration | three-agent harness (opencode is single-agent), sprint contracts, persistent KB across sessions, browser dashboard | richest MCP client, polished TUI, multi-provider routing |
+| **Cline** | ~61.2k | Apache-2.0 | Autonomous coding agent inside VS Code; per-step approval | parallel multi-sprint in worktrees (Cline is sequential), planner/evaluator separation, cross-session memory, project-level CLAUDE.md inheritance | in-IDE UX, mature human-in-the-loop, broad provider support |
+| **Goose** (Block / LF) | ~43.6k | Apache-2.0 | Local extensible AI agent; deepest MCP integration; Rust core; fully offline with Ollama | three-agent harness (Goose is single-agent), sprint contracts + revision loop, 4-tier KB with confidence decay, worktree-per-sprint parallelism | most mature MCP ecosystem, true local-first parity, Rust core, LF foundation governance |
+| **Aider** | ~44.2k | Apache-2.0 | Terminal AI pair-programming; tree-sitter ranked repo map; auto-commits; Architect mode | full three-agent harness with **separate** evaluator on different family (Aider's Architect is two roles, no skeptical reviewer), worktree isolation, persistent KB with confidence | best-in-class repo-map context selection (Forge inherits this!), mature git auto-commit, proven planner/implementer split |
+
+**The core differentiation summary** (after this 2026-05-01 ground-truth pass):
+
+1. **Cross-family evaluator** — only Forge mandates the evaluator come from a different model family than the generator. Every other entry self-evaluates (single-agent), votes among peers (Ruflo, OpenClaw council), or has a same-family Architect (Aider).
+2. **Git-worktree-per-sprint** as first-class — only Forge and OpenClaw treat this as the primary unit of isolation. OpenHands runs Docker-per-session (heavier); opencode/Cline/Goose/Aider edit the working tree.
+3. **4-tier KB with confidence decay across sessions across projects** — Forge alone has procedural memory that learns "this model is bad at Supabase migrations" over time. Ruflo has self-learning shared memory but not the four-tier separation. Goose has session memory + extensions; not a four-tier graph.
+4. **Open-weight + local-first + no telemetry simultaneously** — Goose comes closest (Apache-2.0, MCP-native, Ollama parity, LF foundation). The differentiator narrows to: harness topology + KB design.
+
+**Goose is the closest philosophical sibling.** The honest framing: Forge and Goose are converging toward the same destination from different angles (Goose: agent + extensions + Rust + MCP; Forge: harness + KB + Python + asyncio). The harness topology and four-tier KB are where Forge's bets earn their rent.
+
 ## What this document is *not*
 
 - It's not a feature roadmap (see [BUILD_PLAN.md](BUILD_PLAN.md))
