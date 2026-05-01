@@ -62,6 +62,46 @@ _RATE_LIMIT_MAX_MSG = 10
 _MAX_MESSAGE_BYTES = 1_000_000  # 1 MB
 _client_msg_times: dict[int, deque] = defaultdict(lambda: deque(maxlen=_RATE_LIMIT_MAX_MSG))
 
+
+# Sprint 9 / Layer 10: Origin header allow-list.
+#
+# The WebSocket bind is loopback-only (ADR-013), but a malicious page
+# the user visits can still attempt cross-site WebSocket hijacking by
+# loading ws://127.0.0.1:9111 from a different origin. The browser
+# sends an Origin header for cross-origin requests; an empty Origin
+# (CLI / TUI) is allowed because non-browser clients never send one.
+#
+# Allowed origins:
+#   - http://localhost:3000         (Next.js dev server)
+#   - http://127.0.0.1:3000         (same, IP form)
+#   - http://localhost:<any>        (custom dev port)
+#   - http://127.0.0.1:<any>        (same, IP form)
+#   - "" or None                    (CLI / TUI / non-browser)
+#
+# Anything else (https://attacker.com that loads localhost in an
+# iframe / fetches via WS) is rejected with code 4403 (custom close,
+# Forge-specific) before any messages flow.
+_ALLOWED_ORIGIN_HOSTS: tuple[str, ...] = ("localhost", "127.0.0.1")
+
+
+def _origin_allowed(origin: str | None) -> bool:
+    """Return True iff the connection's Origin header passes the allow-list.
+
+    Empty / None / missing Origin = allowed (CLI / TUI / non-browser).
+    Browser-issued WS handshakes always include an Origin so the test
+    is "is the origin a localhost variant?" rather than "is there one?".
+    """
+    if not origin:
+        return True
+    # Origin header format: ``<scheme>://<host>[:<port>]`` (no path).
+    # Split off the scheme and verify the host part is a localhost variant.
+    if "://" not in origin:
+        return False
+    _, _, hostport = origin.partition("://")
+    host = hostport.split(":", 1)[0]
+    return host in _ALLOWED_ORIGIN_HOSTS
+
+
 # Task 2.3: cap concurrent message handlers so a flood of cheap requests
 # from one tab can't starve the daemon's CPU. With 10 in flight at once,
 # each over-budget request waits its turn rather than spawning unbounded
@@ -295,6 +335,26 @@ async def _handle_message_inner(
 
 async def _handler(ws, path, db: ForgeDB, budget: BudgetController):
     """Handle a WebSocket connection."""
+    # Sprint 9 / Layer 10: cross-site WebSocket hijack defense. Reject
+    # any handshake whose Origin isn't a localhost variant. Non-browser
+    # clients (CLI / TUI) don't send Origin so they pass through.
+    origin = None
+    try:
+        # websockets >=10 exposes request_headers; older fall back to
+        # request.headers. Be defensive against both shapes.
+        headers = getattr(ws, "request_headers", None) or getattr(
+            getattr(ws, "request", None), "headers", {}
+        )
+        if hasattr(headers, "get"):
+            origin = headers.get("Origin") or headers.get("origin")
+    except Exception:  # never let header introspection crash a connection
+        origin = None
+
+    if not _origin_allowed(origin):
+        logger.warning("rejecting WS connection from disallowed Origin: %r", origin)
+        await ws.close(code=4403, reason="origin not allowed")
+        return
+
     _clients.add(ws)
     ctx = None
     try:
