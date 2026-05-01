@@ -5,6 +5,11 @@ Triggered automatically:
   - On the first `forge serve` if `.forge/connectors.toml` doesn't exist
   - Manually via `forge wizard`
 
+Also exposes ``confirm_capability_changes`` — the re-approval helper used
+by the dispatcher / CLI when a plugin's manifest changed and its declared
+capabilities widened. Re-approval is strictly user-mediated: there is no
+automatic "trust the new manifest" path.
+
 Design priorities (in order):
   1. **Zero surprise** — never write credentials anywhere; only document them
   2. **Detect what's already there** — read .claude/settings.json first; the
@@ -588,3 +593,92 @@ def healthcheck_connector(c: WizardConnector) -> tuple[bool, str]:
         return (False, f"exit {result.returncode}: {result.stderr[:200]}")
     except (OSError, subprocess.TimeoutExpired) as e:
         return (False, f"healthcheck failed: {e}")
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Capability-change re-approval (Sprint 6.1.5)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _is_capability_widening(old: object, new: object) -> bool:
+    """True iff ``new`` is strictly broader than ``old``.
+
+    For list-typed scopes (network / filesystem / exec / secrets_read),
+    widening = the new list contains an item the old list did not. For
+    numeric limits (memory_mb / cpu_seconds / wall_seconds), widening =
+    a higher value.
+
+    We only prompt re-approval on widening — narrowing the scope is
+    safe and we let it proceed. This keeps the prompt-rate low; the
+    only changes that interrupt the user are ones that genuinely
+    expand the plugin's reach.
+    """
+    if isinstance(old, list) and isinstance(new, list):
+        return any(item not in old for item in new)
+    if isinstance(old, (int, float)) and isinstance(new, (int, float)):
+        return new > old
+    # Type changed or one side missing — treat as widening (conservative).
+    return old != new
+
+
+def find_widened_capabilities(
+    diff: dict[str, tuple[object, object]],
+) -> dict[str, tuple[object, object]]:
+    """Return only the diff entries where the new scope is broader.
+
+    ``diff`` is the output of ``PluginsLock.diff_capabilities``. Removing
+    items, narrowing limits, or unchanged keys are dropped — the wizard
+    only prompts when re-approval is genuinely warranted.
+    """
+    return {
+        key: (old, new) for key, (old, new) in diff.items() if _is_capability_widening(old, new)
+    }
+
+
+def confirm_capability_changes(
+    *,
+    plugin_kind: str,
+    plugin_name: str,
+    diff: dict[str, tuple[object, object]],
+    confirm: Callable[[str, bool], bool] | None = None,
+    print_fn: Callable[[str], None] = print,
+) -> bool:
+    """Prompt the user when a plugin's capabilities widened. Returns the
+    user's decision (True = approve the new caps, False = refuse).
+
+    Called by the dispatcher / CLI when ``PluginsLock.diff_capabilities``
+    returns non-None and the diff includes at least one widened entry.
+    A pure narrowing diff (e.g. plugin dropped a host) returns True
+    immediately because narrowing is always safe.
+
+    Behaviour:
+      - non-tty: returns False (refuse — no chance to consent)
+      - widened: prints the diff with old → new, asks Y/N (default N)
+      - narrowed only: returns True silently
+
+    The caller is responsible for re-pinning the lock entry on True.
+    """
+    widened = find_widened_capabilities(diff)
+    if not widened:
+        # Pure narrowing — safe, auto-approve.
+        return True
+
+    confirm = confirm or _default_confirm
+    p = print_fn
+
+    p("")
+    p(f"  ⚠ Plugin '{plugin_kind}:{plugin_name}' is asking for broader capabilities than")
+    p("    you previously approved. Review and decide:")
+    p("")
+    for key in sorted(widened):
+        old, new = widened[key]
+        p(f"    [{key}]")
+        p(f"      previously approved: {old!r}")
+        p(f"      new manifest wants:  {new!r}")
+    p("")
+    p("  Re-approve only if you trust the new manifest. The plugin won't run")
+    p("  until you decide. Refusing is safe — the previously approved version")
+    p("  stays pinned and you can re-install later.")
+    p("")
+
+    return confirm("  Approve the new capabilities?", False)
