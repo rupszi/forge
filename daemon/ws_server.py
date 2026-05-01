@@ -140,10 +140,15 @@ async def _handle_message_inner(
         if not _validate_init_path(path):
             return {"type": "error", "error": "path outside permitted scope"}
         ctx = await scan_project(path)
+        # Sprint 6.0.1: daemon-side billing-tier detection. The UI uses
+        # this instead of inferring tier from model names client-side.
+        from .billing import detect_tier
+
         return {
             "type": "project_context",
             **ctx.to_dict(),
             "knowledge_count": kb.count(),
+            "billing_tier": detect_tier(path),
         }
 
     if msg_type == "status":

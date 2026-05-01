@@ -12,6 +12,7 @@ import type {
 import type { Mode } from "@/components/ModePicker";
 import type { Verbosity } from "@/components/TranscriptView";
 import type { StreamEvent } from "@/components/OutputStream";
+import type { Tier } from "@/components/ContextMeter";
 
 const WS_URL = "ws://127.0.0.1:9111";
 
@@ -33,6 +34,7 @@ export function useForgeSocket() {
   const [mode, setModeState] = useState<Mode>("auto");
   const [verbosity, setVerbosityState] = useState<Verbosity>("normal");
   const [model, setModel] = useState<string>("qwen3-coder-next");
+  const [tier, setTier] = useState<Tier>("free");  // daemon-supplied; see daemon/billing.py
   const [contextUsed, setContextUsed] = useState(0);
   const [contextCap, setContextCap] = useState(128_000);
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([]);
@@ -90,13 +92,22 @@ export function useForgeSocket() {
       // Per-type state updates
       switch (msg.type) {
         case "project_context": {
-          const ctx = msg as unknown as ProjectContext & { mcp_servers?: { name: string }[] };
+          const ctx = msg as unknown as ProjectContext & {
+            mcp_servers?: { name: string }[];
+            billing_tier?: Tier;
+          };
           setContext(ctx);
           if (ctx.mcp_servers) {
             setEnabledConnectors(ctx.mcp_servers.map((s) => s.name));
           }
+          if (ctx.billing_tier) {
+            setTier(ctx.billing_tier);
+          }
           break;
         }
+        case "tier_changed":
+          setTier((msg as any).tier as Tier);
+          break;
         case "plan_created":
           setSprints((msg as any).sprints ?? []);
           break;
@@ -199,5 +210,6 @@ export function useForgeSocket() {
     durationSec,
     totalTokens,
     diffStats,
+    tier,
   };
 }

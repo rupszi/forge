@@ -25,7 +25,7 @@
 
 import React from "react";
 
-type Tier = "free" | "metered" | "subscription";
+export type Tier = "free" | "metered" | "subscription";
 
 export type ContextMeterProps = {
   contextUsed: number;        // tokens used in the current sprint context
@@ -33,7 +33,10 @@ export type ContextMeterProps = {
   costUsd: number;            // accumulated $ spend this session (0 for Ollama)
   budgetUsd: number;          // session $ cap (from BudgetController)
   model: string;              // active model identifier
-  modelTier?: Tier;           // free | metered | subscription — controls what's shown
+  // Tier comes from the daemon (billing.py::detect_tier). When undefined,
+  // we fall back to a conservative "free" — the daemon ALWAYS sends one,
+  // so undefined means "not connected yet" and we shouldn't guess.
+  tier?: Tier;
   // Subscription metering (only populated for Anthropic plan-based clients)
   planUsage?: {
     fiveHour?: { used: number; resetsInHours: number };  // 0..1
@@ -50,7 +53,8 @@ export function ContextMeter(props: ContextMeterProps) {
     costUsd,
     budgetUsd,
     model,
-    modelTier = inferTier(model),
+    tier = "free",  // Conservative default — daemon ALWAYS sends one; this
+                    // is just for the moments before connect lands.
     planUsage,
   } = props;
 
@@ -74,7 +78,7 @@ export function ContextMeter(props: ContextMeterProps) {
       </div>
 
       {/* Cost meter — only shown for metered tier (paid API) */}
-      {modelTier === "metered" && (
+      {tier === "metered" && (
         <div className="flex items-center gap-2 border-l border-[#1e1e2e] pl-4">
           <span className="text-gray-500">Spend</span>
           <span className="tabular-nums">
@@ -90,7 +94,7 @@ export function ContextMeter(props: ContextMeterProps) {
       )}
 
       {/* Subscription plan-tier bars — only for subscription mode */}
-      {modelTier === "subscription" && planUsage && (
+      {tier === "subscription" && planUsage && (
         <div className="flex items-center gap-3 border-l border-[#1e1e2e] pl-4">
           {planUsage.fiveHour && (
             <PlanBar
@@ -110,7 +114,7 @@ export function ContextMeter(props: ContextMeterProps) {
       )}
 
       {/* Free tier — show "Free (Ollama)" badge */}
-      {modelTier === "free" && (
+      {tier === "free" && (
         <div className="flex items-center gap-2 border-l border-[#1e1e2e] pl-4">
           <span className="px-1.5 py-0.5 text-[10px] rounded bg-teal-900/40 text-teal-300 border border-teal-800/30">
             Free (Ollama)
@@ -123,7 +127,7 @@ export function ContextMeter(props: ContextMeterProps) {
         <span className="text-gray-300 font-mono text-[11px]">{model}</span>
         <span className="text-gray-500">·</span>
         <span className="text-gray-400 text-[11px]">
-          {tierBadge(modelTier)}
+          {tierBadge(tier)}
         </span>
       </div>
     </div>
@@ -158,17 +162,6 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
-}
-
-function inferTier(model: string): Tier {
-  const m = model.toLowerCase();
-  if (m.startsWith("claude-") || m === "opus" || m === "sonnet" || m === "haiku") {
-    return "subscription";  // assume subscription unless billing tells us otherwise
-  }
-  if (m.startsWith("gpt-") || m.includes("gemini")) {
-    return "metered";
-  }
-  return "free";  // Ollama / open-weight = $0
 }
 
 function tierBadge(tier: Tier): string {

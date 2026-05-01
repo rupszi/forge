@@ -40,6 +40,7 @@ export default function Home() {
     durationSec,
     totalTokens,
     diffStats,
+    tier,
   } = useForgeSocket();
 
   // Slash palette state — controlled here so the prompt input can trigger it
@@ -68,6 +69,7 @@ export default function Home() {
           costUsd={budget.spent_usd}
           budgetUsd={budget.budget_usd}
           model={model}
+          tier={tier}
         />
       </div>
 
