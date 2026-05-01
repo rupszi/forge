@@ -221,11 +221,38 @@ async def dispatch_slash(msg_type: str, arg: str, ctx: SlashContext) -> dict | N
     """Resolve ``slash.<name>`` → handler call. Returns the response
     dict, or ``None`` if ``msg_type`` doesn't match a known slash command
     (caller falls back to its default unknown-message handling).
+
+    Resolution order:
+      1. Built-in commands (HANDLERS dict)
+      2. Custom commands from ``.forge/commands/*.md`` and
+         ``.claude/commands/*.md`` (Sprint 7.3 — user-defined)
+      3. Unknown → structured error
     """
     if not msg_type.startswith("slash."):
         return None
     name = msg_type[len("slash.") :]
+
     handler = HANDLERS.get(name)
-    if handler is None:
-        return {"type": "error", "error": f"unknown slash command: /{name}"}
-    return await handler(arg or "", ctx)
+    if handler is not None:
+        return await handler(arg or "", ctx)
+
+    # Sprint 7.3: try the user's custom commands. We rediscover on each
+    # call so dropped-in files take effect without restart — same UX as
+    # Claude Code. Discovery cost is one directory listing.
+    from pathlib import Path as _Path
+
+    from .custom_commands import discover_commands, render
+
+    custom = discover_commands(_Path.cwd()).get(name)
+    if custom is not None:
+        rendered = render(custom, arg or "")
+        return {
+            "type": "custom_command",
+            "name": custom.name,
+            "objective": rendered,
+            "model": custom.model,
+            "allowed_tools": custom.allowed_tools,
+            "source": str(custom.source_path) if custom.source_path else "",
+        }
+
+    return {"type": "error", "error": f"unknown slash command: /{name}"}
