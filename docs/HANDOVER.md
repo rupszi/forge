@@ -1,12 +1,12 @@
 # Forge — Handover Brief
 
-> **Purpose**: a fresh chat session can read this document and immediately pick up where we left off without context loss. Updated 2026-05-01 — Sprint 6.1 closed.
+> **Purpose**: a fresh chat session can read this document and immediately pick up where we left off without context loss. Updated 2026-05-01 — Sprints 6.1–6.4 closed.
 
 ---
 
 ## In one paragraph
 
-Forge is a multi-agent coding orchestrator (planner / generator / cross-family-evaluator) that runs locally on open-weight LLMs by default, with a persistent SQLite KB that compounds across sessions. We are at **Phase 1, Sprint 6.1 complete** — the plugin runtime is wired end-to-end (egress filter, append-only audit log, manifest hash pinning, dispatcher, capability re-approval, CLI healthchecks). The next milestone is **v0.1.0 — a signed, distributable desktop app (Tauri v2 + Python sidecar + Next.js webview)** built from the 5 HTML mockups at `mockups/`. The full 16-week delivery plan lives at `docs/DELIVERY_PLAN.md`. **The next concrete task is Sprint 6.2 — mode enforcement (~2 days).**
+Forge is a multi-agent coding orchestrator (planner / generator / cross-family-evaluator) that runs locally on open-weight LLMs by default, with a persistent SQLite KB that compounds across sessions. We are at **Phase 1, Sprints 6.1 → 6.4 all complete** — the plugin runtime is wired end-to-end (egress filter, append-only audit log, manifest hash pinning, dispatcher, capability re-approval, CLI healthchecks); the UI mode picker actually changes daemon behavior; daemon-side slash command handlers landed; two reference connectors (git read-only + web_research) ship in-tree as worked examples. The next milestone is **v0.1.0 — a signed, distributable desktop app (Tauri v2 + Python sidecar + Next.js webview)** built from the 5 HTML mockups at `mockups/`. The full 16-week delivery plan lives at `docs/DELIVERY_PLAN.md`. **The next concrete task is Sprint 6.5 (UI rebuild from mockups) → then Phase 2 (Claude Code parity, 3 weeks).**
 
 ---
 
@@ -17,7 +17,7 @@ cd /Users/palmegyes/Development/forge
 
 # 1. Tests must be green
 PYTHONPATH=. .venv/bin/pytest tests/ --no-header -q | tail -3
-# Expect: 744 passed, 1 skipped
+# Expect: 789 passed, 1 skipped
 
 # 2. Lint + format must be clean
 .venv/bin/ruff check daemon tests forge_plugin_api | tail -3
@@ -51,12 +51,13 @@ If any of those fail, troubleshoot before continuing.
 
 | Layer | Path | Lines | Status |
 |---|---|---|---|
-| Daemon (Python 3.12) | `daemon/` | ~10,200 | Functional — Sprint 6.1 complete (plugin runtime wired); 6.2 next |
+| Daemon (Python 3.12) | `daemon/` | ~11,200 | Functional — Sprints 6.1–6.4 complete; 6.5 (UI rebuild) next |
 | Plugin author API | `forge_plugin_api/` | ~700 | Adds `http.py` egress shim — `Connector`, `Tool`, `LLMAdapter`, `MockSandbox`, `FakeHttpClient`, `CapabilityViolation`, `GuardedAsyncClient`, `make_http_client` |
+| Reference plugins | `reference_plugins/` | 2 plugins | `git/` (read-only worktree ops) + `web_research/` (allow-listed HTTP fetch); SKILL.md + manifest.toml + scripts/main.py each |
 | UI (Next.js) | `ui/` | ~2,400 | Builds clean (`next build` ok); 12 components incl. ContextMeter / ModePicker / TranscriptView / AttachMenu / SlashCommandPalette / OutputStream / MetadataBar |
-| Mockups | `mockups/` | 5 HTML files + index | Saved 2026-05-01; **the contract for Phase 5 UI rebuild** |
+| Mockups | `mockups/` | 5 HTML files + index | Saved 2026-05-01; **the contract for Sprint 6.5 UI rebuild** |
 | Install scripts | `install.sh`, `uninstall.sh` | ~700 | 9-phase interactive installer; `--check` / `--yes` / `upgrade` modes |
-| Tests | `tests/` | 41 files | 744 passing, 1 skipped (mcp extra) |
+| Tests | `tests/` | 44 files | 789 passing, 1 skipped (mcp extra) |
 | Docs | `docs/` | 14 files | All current — see Master Plan below |
 
 ---
@@ -112,7 +113,7 @@ If any of these become contentious, write them up as ADR-018+.
 
 ## What's next, concretely
 
-**Sprint 6.1 — Plugin runtime — DONE.** All six tasks landed; acceptance gates verified end-to-end with real-subprocess tests.
+**Sprints 6.1 → 6.4 all DONE.** Plugin runtime, mode enforcement, slash handlers, and reference connectors — every acceptance gate verified end-to-end (many with real-subprocess tests).
 
 | # | Task | What landed | Test file |
 |---|---|---|---|
@@ -122,13 +123,19 @@ If any of these become contentious, write them up as ADR-018+.
 | 6.1.4 | Manifest hash pinning via `.forge/plugins.lock` | `daemon/skills/lock.py` — `PluginsLock`, `LockEntry`, `SkillTampered`, `default_lock_path`; TOML format, schema-versioned | `tests/test_plugins_lock.py` (17 tests) |
 | 6.1.5 | Capability-change re-approval prompt | `daemon/wizard.py::confirm_capability_changes` + `find_widened_capabilities`; pure narrowing auto-approves; widening prompts default-N | `tests/test_capability_reapproval.py` (12 tests) |
 | 6.1.6 | `forge connectors/skills test <name>` CLI healthchecks | `daemon/cli.py::cmd_connectors` / `cmd_skills` with `add` / `install` / `list` / `test` / `remove` actions | `tests/test_cli_plugin_commands.py` (13 tests) |
+| 6.2 | UI mode picker actually changes daemon behavior | `daemon/mode.py` — `ModeState` + `mode_prompt_addendum`; scheduler `plan` skips wave loop; `bypass` logs WARNING; `ask` injects prompt addendum | `tests/test_mode_enforcement.py` (16 tests) |
+| 6.3 | Real daemon-side slash command handlers | `daemon/slash.py` — 11-command registry (`/help`, `/clear`, `/quit`, `/mode`, `/model`, `/memory`, `/budget`, `/connectors`, `/skills`, `/llms`, `/wizard`); `dispatch_slash` re-exported via WS | `tests/test_slash_handlers.py` (21 tests) |
+| 6.4 | Reference connectors (git + web_research) | `reference_plugins/git/` (read-only worktree ops with op + flag allow-lists) and `reference_plugins/web_research/` (allow-listed HTTP fetch via egress shim) | `tests/test_reference_connectors.py` (8 tests, 6 real subprocess) |
 
 **Acceptance gates verified:**
 - ✓ A tampered plugin file refuses to run with `SkillTampered` (test: `test_tampered_plugin_refuses_to_run`)
-- ✓ A plugin trying to fetch a non-allowlisted URL raises `CapabilityViolation` (test: `test_egress_to_non_allowlisted_host_raises_capability_violation` — real subprocess)
+- ✓ A plugin trying to fetch a non-allowlisted URL raises `CapabilityViolation` (test: `test_egress_to_non_allowlisted_host_raises_capability_violation` — real subprocess; also the `web_research` reference connector via `test_web_research_refuses_non_allowlisted_url`)
 - ✓ The audit log shows every invocation (test: `test_every_invocation_writes_two_rows`)
+- ✓ Five-mode picker actually branches daemon behavior — plan halts after planning, ask injects an instructional preamble, bypass emits an audit warning, auto/accept_edits run end-to-end (test: `test_scheduler_skips_wave_execution_in_plan_mode`)
+- ✓ Slash commands typed in TUI / web command bar reach real daemon handlers (test: `test_ws_server_routes_slash_through_dispatcher`)
+- ✓ Reference plugins demonstrate the contract end-to-end — git read-only ops + narrow-allow-list egress
 
-**Next: Sprint 6.2 — Mode enforcement** (~2 days). Wire the existing `ModePicker` UI mode (auto / accept_edits / plan / ask / bypass) into the daemon so each mode actually changes the agent loop's behavior. Currently `set_mode` only updates the WS state — the generator and evaluator don't see it. After 6.2: 6.3 (slash handlers, 2 days) → 6.4 (reference connectors, 3 days). Then Phase 2 (Claude Code parity, 3 weeks).
+**Next: Sprint 6.5 — UI rebuild from mockups** (~5 days). The 5 HTML mockups at `mockups/` are the contract for the Phase 5 Next.js rebuild — `next build` already passes on the existing 12 components, but the dashboard layout doesn't match the mockup designs yet. After 6.5: Phase 2 (Claude Code parity, 3 weeks).
 
 ---
 
@@ -248,6 +255,6 @@ For the full history: `git log --oneline | wc -l` → ~50 commits since session 
 
 ## TL;DR for a fresh chat
 
-> "We're building a desktop coding-agent app. Plan is locked at `docs/DELIVERY_PLAN.md` — 16 weeks, Tauri v2 + Python sidecar, ~$700 out-of-pocket. **Sprint 6.1 (plugin runtime) is done** — egress shim, audit log, plugin lock, dispatcher, re-approval prompt, CLI healthchecks all wired with real-subprocess tests. Next concrete task is Sprint 6.2 — wire the existing UI mode picker (auto / accept_edits / plan / ask / bypass) into the agent loop so the modes actually change behavior. Tests at 744 passing, lint+format clean. The user is in auto mode; execute Sprint 6.2 unless they redirect."
+> "We're building a desktop coding-agent app. Plan is locked at `docs/DELIVERY_PLAN.md` — 16 weeks, Tauri v2 + Python sidecar, ~$700 out-of-pocket. **Sprints 6.1 → 6.4 all done** — plugin runtime end-to-end (egress shim, audit log, plugin lock, dispatcher, re-approval, CLI healthchecks), UI mode picker actually changes daemon behavior, daemon-side slash handlers, two reference connectors (git + web_research) with real-subprocess tests. Next concrete task is Sprint 6.5 — UI rebuild from the 5 HTML mockups. Tests at 789 passing, lint+format clean. The user is in auto mode; execute Sprint 6.5 unless they redirect."
 
 Welcome to Forge.
