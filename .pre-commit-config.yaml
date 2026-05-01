@@ -31,13 +31,12 @@ repos:
       - id: gitleaks
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    # Bumped from v0.8.4 → v0.15.12 to match the local ruff version
+    # (pyproject.toml uses RUF059 which was added after v0.8.4). The hook
+    # ID was also renamed ``ruff`` → ``ruff-check`` around v0.9.
+    rev: v0.15.12
     hooks:
-      # In ruff-pre-commit v0.8.4 the IDs are ``ruff`` and ``ruff-format``.
-      # ``ruff-check`` was renamed-in later versions; bumping ``rev`` is the
-      # follow-up. See docs/EXECUTION_PLAN.md and the chore commit pinning
-      # this fix.
-      - id: ruff
+      - id: ruff-check
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
 
