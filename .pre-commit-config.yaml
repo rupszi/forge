@@ -22,6 +22,10 @@ repos:
         args: [--maxkb=500]
       - id: check-merge-conflict
       - id: detect-private-key
+        # Test fixtures intentionally contain fake PEM blocks (e.g.,
+        # tests/test_redact.py asserts the PEM-key rule fires). Exclude
+        # test files; daemon/ + everything else still gates.
+        exclude: ^tests/test_.*\.py$
       - id: mixed-line-ending
         args: [--fix=lf]
 
