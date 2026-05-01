@@ -577,6 +577,19 @@ else
   warn "forge doctor reported issues — see above"
 fi
 
+# ──────────────────────────────────────────────────────────────────────
+#  9b. First-run connector wizard
+# ──────────────────────────────────────────────────────────────────────
+
+if [[ "$NON_INTERACTIVE" != "1" ]]; then
+  log ""
+  if confirm "Run the first-run connector setup wizard now?" "Y"; then
+    .venv/bin/forge wizard 2>&1 | tee -a "$LOG_FILE" || warn "wizard exited with errors"
+  else
+    info "Skipped. Run later with: forge wizard"
+  fi
+fi
+
 # Final summary
 header "Summary"
 

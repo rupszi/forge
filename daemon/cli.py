@@ -289,11 +289,22 @@ def cmd_serve(args):
     code 1001 (going away), waits for in-flight handlers, and only then
     returns. ``db.close()`` runs in the surrounding finally so WAL flushes
     cleanly even on Kubernetes evict / explicit ``kill <pid>``.
+
+    First-run wizard: if ``.forge/connectors.toml`` does not yet have a
+    ``meta.wizard_completed_at`` stamp, we auto-launch the connector
+    wizard before starting the WS server. Skipped in non-tty mode (CI).
     """
     import signal
+    from pathlib import Path
 
     from .worktree import register_signal_handlers
     from .ws_server import start_server
+
+    # First-run wizard hook (auto-trigger). The wizard itself is a no-op
+    # when stdin isn't a TTY, so this is safe under nohup / docker -d.
+    forge_dir = Path(os.getcwd()) / ".forge"
+    if not _has_wizard_run(forge_dir):
+        _maybe_run_wizard(forge_dir)
 
     register_signal_handlers()
     db = _get_db()
@@ -334,6 +345,67 @@ def cmd_reset(args):
         db._conn.execute("DELETE FROM sessions")
     print("  Cleared tasks and sessions. Knowledge base preserved.")
     db.close()
+
+
+def cmd_wizard(args):
+    """Launch the first-run connector setup wizard.
+
+    Idempotent — safe to re-run. Picks up where it left off; never
+    overwrites credentials. See daemon/wizard.py for the full flow.
+    """
+    from pathlib import Path
+
+    from .wizard import WizardOptions, run_wizard
+
+    project_path = Path(os.getcwd())
+    forge_dir = project_path / ".forge"
+    forge_dir.mkdir(exist_ok=True)
+    claude_settings = project_path / ".claude" / "settings.json"
+
+    opts = WizardOptions(
+        project_path=project_path,
+        forge_dir=forge_dir,
+        claude_settings_path=claude_settings,
+        non_interactive=getattr(args, "yes", False),
+    )
+    run_wizard(opts)
+    return 0
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  First-run hook helpers (used by cmd_serve)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _has_wizard_run(forge_dir) -> bool:
+    """Cheap check used in cmd_serve to decide whether to auto-trigger."""
+    from .wizard import has_completed_wizard
+
+    return has_completed_wizard(forge_dir)
+
+
+def _maybe_run_wizard(forge_dir) -> None:
+    """Launch the wizard from cmd_serve if conditions are right.
+
+    Skips silently in non-tty environments (CI, docker -d, nohup) so
+    background-launched daemons don't block on stdin.
+    """
+    import os as _os
+    import sys
+
+    if not sys.stdin.isatty():
+        return
+    print("\n  No connectors configured yet — launching the setup wizard.")
+    print("  (Skip with: forge serve --skip-wizard, or re-run later: forge wizard)")
+    print()
+    args_obj = type("A", (), {"yes": False})
+    cmd_wizard(args_obj)
+    # Re-confirm before continuing — user may want to set env vars first.
+    if _os.isatty(0):
+        try:
+            input("  Press Enter to start the daemon, Ctrl-C to exit and set env vars first: ")
+        except (EOFError, KeyboardInterrupt):
+            sys.exit(0)
 
 
 def cmd_replay(args):
@@ -391,6 +463,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("budget", help="Show budget")
     sub.add_parser("serve", help="Start daemon + dashboard")
     sub.add_parser("reset", help="Clear tasks (keep KB)")
+    wiz = sub.add_parser(
+        "wizard",
+        help="Run the first-run connector setup wizard (idempotent; safe to re-run)",
+    )
+    wiz.add_argument("--yes", action="store_true", help="Non-interactive mode (CI / Docker)")
     sub.add_parser(
         "mcp-serve",
         help="Run Forge KB as an MCP server over stdio (for Claude Desktop / Cursor / Continue)",
@@ -438,6 +515,7 @@ def main():
         "reset": cmd_reset,
         "replay": cmd_replay,
         "mcp-serve": cmd_mcp_serve,
+        "wizard": cmd_wizard,
     }
 
     if args.command in commands:
