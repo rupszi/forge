@@ -1,12 +1,12 @@
 # Forge — Handover Brief
 
-> **Purpose**: a fresh chat session can read this document and immediately pick up where we left off without context loss. Updated 2026-05-01 — Sprints 6.1–6.4 closed.
+> **Purpose**: a fresh chat session can read this document and immediately pick up where we left off without context loss. Updated 2026-05-01 — Sprints 6.1–6.4 + 7.1/7.3/7.4/7.6/7.10 + Sprint 9 L5/L10 closed.
 
 ---
 
 ## In one paragraph
 
-Forge is a multi-agent coding orchestrator (planner / generator / cross-family-evaluator) that runs locally on open-weight LLMs by default, with a persistent SQLite KB that compounds across sessions. We are at **Phase 1, Sprints 6.1 → 6.4 all complete** — the plugin runtime is wired end-to-end (egress filter, append-only audit log, manifest hash pinning, dispatcher, capability re-approval, CLI healthchecks); the UI mode picker actually changes daemon behavior; daemon-side slash command handlers landed; two reference connectors (git read-only + web_research) ship in-tree as worked examples. The next milestone is **v0.1.0 — a signed, distributable desktop app (Tauri v2 + Python sidecar + Next.js webview)** built from the 5 HTML mockups at `mockups/`. The full 16-week delivery plan lives at `docs/DELIVERY_PLAN.md`. **The next concrete task is Sprint 6.5 (UI rebuild from mockups) → then Phase 2 (Claude Code parity, 3 weeks).**
+Forge is a multi-agent coding orchestrator (planner / generator / cross-family-evaluator) that runs locally on open-weight LLMs by default, with a persistent SQLite KB that compounds across sessions. We are at **Phase 1 Sprints 6.1–6.4 + Phase 2 (Claude Code parity) Sprints 7.1/7.3/7.4/7.6/7.10 + Phase 4 (security) layers 5 + 10 all complete** — plugin runtime wired end-to-end, mode picker actually changes daemon behavior, daemon-side slash handlers + custom slash commands from `.forge/commands/*.md`, AGENTS.md root-to-leaf walk, output styles registry, refusal templates, lifecycle hooks (PreToolUse / PostToolUse / SessionStart / SubagentStop / PreCompact), Unicode + bidi-override sanitizer, WebSocket Origin allow-list. The next code-side milestone is **Sprint 7.2 (Subagents) + 7.5 (Memory tool) + 7.8 (apply_patch adapter)**. The next external-infrastructure milestone is **v0.1.0 — Tauri v2 desktop wrapper + code signing + GitHub Releases pipeline + SWE-bench eval** (Phases 6/7/8 of `docs/DELIVERY_PLAN.md`).
 
 ---
 
@@ -17,7 +17,7 @@ cd /Users/palmegyes/Development/forge
 
 # 1. Tests must be green
 PYTHONPATH=. .venv/bin/pytest tests/ --no-header -q | tail -3
-# Expect: 789 passed, 1 skipped
+# Expect: 894 passed, 1 skipped
 
 # 2. Lint + format must be clean
 .venv/bin/ruff check daemon tests forge_plugin_api | tail -3
@@ -51,13 +51,13 @@ If any of those fail, troubleshoot before continuing.
 
 | Layer | Path | Lines | Status |
 |---|---|---|---|
-| Daemon (Python 3.12) | `daemon/` | ~11,200 | Functional — Sprints 6.1–6.4 complete; 6.5 (UI rebuild) next |
+| Daemon (Python 3.12) | `daemon/` | ~13,500 | Functional — Phase-1 done + Phase-2 parity 5/10 + Phase-4 layers 5/10/12/15 |
 | Plugin author API | `forge_plugin_api/` | ~700 | Adds `http.py` egress shim — `Connector`, `Tool`, `LLMAdapter`, `MockSandbox`, `FakeHttpClient`, `CapabilityViolation`, `GuardedAsyncClient`, `make_http_client` |
 | Reference plugins | `reference_plugins/` | 2 plugins | `git/` (read-only worktree ops) + `web_research/` (allow-listed HTTP fetch); SKILL.md + manifest.toml + scripts/main.py each |
 | UI (Next.js) | `ui/` | ~2,400 | Builds clean (`next build` ok); 12 components incl. ContextMeter / ModePicker / TranscriptView / AttachMenu / SlashCommandPalette / OutputStream / MetadataBar |
 | Mockups | `mockups/` | 5 HTML files + index | Saved 2026-05-01; **the contract for Sprint 6.5 UI rebuild** |
 | Install scripts | `install.sh`, `uninstall.sh` | ~700 | 9-phase interactive installer; `--check` / `--yes` / `upgrade` modes |
-| Tests | `tests/` | 44 files | 789 passing, 1 skipped (mcp extra) |
+| Tests | `tests/` | 51 files | 894 passing, 1 skipped (mcp extra) |
 | Docs | `docs/` | 14 files | All current — see Master Plan below |
 
 ---
@@ -135,7 +135,42 @@ If any of these become contentious, write them up as ADR-018+.
 - ✓ Slash commands typed in TUI / web command bar reach real daemon handlers (test: `test_ws_server_routes_slash_through_dispatcher`)
 - ✓ Reference plugins demonstrate the contract end-to-end — git read-only ops + narrow-allow-list egress
 
-**Next: Sprint 6.5 — UI rebuild from mockups** (~5 days). The 5 HTML mockups at `mockups/` are the contract for the Phase 5 Next.js rebuild — `next build` already passes on the existing 12 components, but the dashboard layout doesn't match the mockup designs yet. After 6.5: Phase 2 (Claude Code parity, 3 weeks).
+### Sprint 7 (Phase 2 parity) — what landed
+
+| # | Task | What landed | Test file |
+|---|---|---|---|
+| 7.1 | Hooks system (PreToolUse / PostToolUse / SessionStart / SubagentStop / PreCompact) | `daemon/hooks.py` — Claude-Code-compatible JSON-on-stdin / JSON-on-stdout contract; SessionStart wired into `scheduler.execute_session`; remaining call sites land alongside the per-event use cases | `tests/test_hooks.py` (18 tests) |
+| 7.3 | Custom slash commands from `.forge/commands/*.md` | `daemon/custom_commands.py` — minimal YAML-frontmatter parser, `discover_commands(project)` walking both `.forge/` and `.claude/` (Forge overrides Claude); slash dispatcher resolution chain extended | `tests/test_custom_commands.py` (22 tests) |
+| 7.4 | AGENTS.md root-to-leaf walk in scanner | `daemon/scanner/claude_code.py::read_agents_md` walking project root → cwd, AGENTS.override.md > AGENTS.md per level, populated into `ProjectContext.agents_md` | `tests/test_agents_md.py` (10 tests) |
+| 7.6 | Output styles registry | `daemon/output_styles.py` — five built-ins (default / terse / explanatory / strict-reviewer / pr-bot) + user overrides at `.forge/output-styles/*.md`; `style_addendum(name)` returns the system-prompt addendum | `tests/test_output_styles.py` (14 tests) |
+| 7.10 | Refusal templates | `daemon/refusal.py` — Claude-Code-shaped structured refusals for destructive-op blocks, hook blocks (PreToolUse / PostToolUse), egress capability violations, and SkillTampered hash mismatches | `tests/test_refusal_templates.py` (12 tests) |
+
+### Sprint 9 (Phase 4 security layers) — what landed in this run
+
+| Layer | Description | Status |
+|---|---|---|
+| L5 | Unicode + bidi-override sanitizer | `daemon/sanitize.py` — Pillar Security 2025 defense; covers bidi controls, ZWSP, tag chars, BOM, variation selectors. Idempotent. `tests/test_sanitize.py` (19 tests) |
+| L10 | WebSocket Origin allow-list | `daemon/ws_server.py::_origin_allowed` — rejects cross-site WS hijack with code 4403 before any message handler runs; CLI/TUI (no Origin) unaffected. `tests/test_ws_origin_check.py` (11 tests) |
+
+### What's NOT yet done — and why
+
+**Sprint 7.2 (Subagents)** — `.forge/agents/<name>.md` registry + planner auto-delegation. Architecturally larger; needs planner-side semantic match against agent descriptions. Defer to next session. ~3 days of focused work.
+
+**Sprint 7.5 (Memory tool)** — Anthropic's view/create/str_replace/insert/delete/rename tool over `.forge/memories/<session>/`. Requires generator-tool-call wiring + compaction-event flush. ~2 days. Plumbing depends on 7.2.
+
+**Sprint 7.7 (Sandbox profiles)** — `sandbox-exec` / `bwrap` profile generation per sprint. OS-specific; needs runtime testing on each platform. ~3 days.
+
+**Sprint 7.8 (apply_patch adapter)** — V4A diff format adapter for Codex CLI. ~150 LOC but needs a Codex-family LLM adapter to test against. ~1 day once the LLM is wired.
+
+**Sprint 7.9 (Background / scheduled sprints)** — cron loop in scheduler + native notifications. ~3 days.
+
+**Sprint 8 (Media layer)** — image / video / multimodal MCP plugins. 17 days; requires ComfyUI / Replicate / OpenAI provider integrations and a real GPU for `forge-media-comfyui` integration tests.
+
+**Sprint 9 layers L1, L7, L8, L11, L13** — provenance tagging, confirm-token binding, prompt-cache key isolation, strict CSP, pre-egress secret redaction. Each needs its own session of focused work. L13 is partially in place (`daemon/redact.py` redacts at persistence boundaries; pre-LLM-prompt redaction is the missing piece).
+
+**Sprint 6.5 (UI rebuild from mockups)** — Next.js components need to be re-laid-out to match the 5 HTML mockups. ~5 days of frontend work; the existing 12 components compile and the WS protocol is stable, so this is design-implementation, not architecture.
+
+**Phases 6–10 (Tauri v2 wrapper, code signing, distribution, SWE-bench eval, launch)** — needs external infrastructure (Apple Developer ID, Tauri toolchain, GitHub Releases CI, SWE-bench harness, signing servers). Not buildable in a code-only chat session; requires the user's involvement for sign-up flows and credential provisioning.
 
 ---
 
@@ -255,6 +290,6 @@ For the full history: `git log --oneline | wc -l` → ~50 commits since session 
 
 ## TL;DR for a fresh chat
 
-> "We're building a desktop coding-agent app. Plan is locked at `docs/DELIVERY_PLAN.md` — 16 weeks, Tauri v2 + Python sidecar, ~$700 out-of-pocket. **Sprints 6.1 → 6.4 all done** — plugin runtime end-to-end (egress shim, audit log, plugin lock, dispatcher, re-approval, CLI healthchecks), UI mode picker actually changes daemon behavior, daemon-side slash handlers, two reference connectors (git + web_research) with real-subprocess tests. Next concrete task is Sprint 6.5 — UI rebuild from the 5 HTML mockups. Tests at 789 passing, lint+format clean. The user is in auto mode; execute Sprint 6.5 unless they redirect."
+> "We're building a desktop coding-agent app. Plan is locked at `docs/DELIVERY_PLAN.md` — 16 weeks, Tauri v2 + Python sidecar, ~$700 out-of-pocket. **Sprints 6.1–6.4 + Sprint 7 parity (7.1/7.3/7.4/7.6/7.10) + Sprint 9 layers 5/10 all done** — plugin runtime, mode picker, slash handlers + custom slash commands, AGENTS.md walk, output styles, refusal templates, lifecycle hooks, Unicode sanitizer, WS Origin check. Tests at 894 passing, lint+format clean. Next code-side: Sprint 7.2 Subagents, 7.5 Memory tool, 7.8 apply_patch. External-infrastructure work (Tauri wrapper / code signing / SWE-bench eval) needs the user's involvement and isn't buildable in a code-only chat. The user is in auto mode."
 
 Welcome to Forge.
