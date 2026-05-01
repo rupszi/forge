@@ -68,8 +68,16 @@ class ConnectorManifest:
                 f"connector {self.name}: declares shell in exec capability "
                 "(sh / bash / zsh / fish) — refused per security policy"
             )
-        if "*" in self.network:
-            raise ValueError(f"connector {self.name}: wildcard network capability '*' refused")
+        # Same wildcard rule as skills (kept in sync deliberately): bare "*"
+        # and TLD-only "*.com" patterns refused; narrow "*.api.example.com"
+        # accepted because the egress shim understands them.
+        for n in self.network:
+            if n == "*":
+                raise ValueError(f"connector {self.name}: wildcard network capability '*' refused")
+            if n.startswith("*.") and n.count(".") == 1:
+                raise ValueError(
+                    f"connector {self.name}: TLD-only wildcard {n!r} is too broad — refused"
+                )
         if any(p == "/" or p.startswith("/etc") for p in self.filesystem):
             raise ValueError(
                 f"connector {self.name}: filesystem capability includes system paths — refused"

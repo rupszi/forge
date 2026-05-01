@@ -1,0 +1,32 @@
+[plugin]
+name = "web_research"
+version = "0.1.0"
+description = "Fetch documentation from a small allow-list of trusted sources via the egress shim"
+author = "Forge contributors"
+license = "MIT"
+schema_version = 1
+forge_min_version = "0.1.0"
+
+# Network capability is the headline contract: only these hosts may be
+# reached. Anything else raises CapabilityViolation in the egress shim
+# (see forge_plugin_api/http.py). The allow-list is deliberately narrow —
+# documentation sources Forge already trusts, no general-purpose web.
+[capabilities]
+network = [
+  "*.python.org",
+  "developer.mozilla.org",
+  "*.github.io",
+  "raw.githubusercontent.com",
+]
+filesystem = []
+exec = []
+secrets_read = []
+
+[limits]
+memory_mb = 256
+cpu_seconds = 30
+wall_seconds = 60
+
+[skill]
+when_to_use = "When the planner needs to fetch reference documentation from Python.org, MDN, GitHub Pages, or raw GitHub. Returns the raw text — does NOT execute it."
+entry_script = "scripts/main.py"

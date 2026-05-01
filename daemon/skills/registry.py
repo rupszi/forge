@@ -49,8 +49,19 @@ class SkillManifest:
                     f"skill {self.name}: declares shell '{b}' in exec — "
                     "refused per security policy (skills cannot ask for shells)"
                 )
-        if "*" in self.network or any("*" in n[:1] for n in self.network):
-            raise ValueError(f"skill {self.name}: wildcard network capability — refused")
+        # Refuse bare "*" (allow-anything) and TLD-only wildcards like
+        # "*.com" / "*.org" / "*.io" (too broad). Narrow subdomain
+        # wildcards like "*.python.org" / "*.github.io" are accepted —
+        # the egress shim (forge_plugin_api/http.py) understands them
+        # and they map to a finite set of hosts under a single org.
+        for n in self.network:
+            if n == "*":
+                raise ValueError(f"skill {self.name}: wildcard network capability — refused")
+            if n.startswith("*.") and n.count(".") == 1:
+                raise ValueError(
+                    f"skill {self.name}: TLD-only wildcard {n!r} is too broad — refused. "
+                    "Use a narrower subdomain wildcard like '*.python.org'."
+                )
         for fs in self.filesystem:
             if fs == "/" or fs.startswith("/etc") or fs.startswith("/sys"):
                 raise ValueError(

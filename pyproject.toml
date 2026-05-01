@@ -215,7 +215,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Tests legitimately use sync os.path / open() in async bodies for setup/teardown,
 # and we don't enforce path/security rules in test scaffolding.
-"tests/**/*.py" = ["S", "B011", "T20", "PTH", "SIM117", "ASYNC230", "ASYNC240", "F841", "RUF005", "RUF006", "S110", "SIM105", "SIM108", "SIM115"]
+"tests/**/*.py" = ["S", "B011", "T20", "PTH", "SIM117", "ASYNC230", "ASYNC240", "ASYNC221", "F841", "RUF005", "RUF006", "S110", "SIM105", "SIM108", "SIM115"]
 "scripts/**/*.py" = ["T20", "S", "PTH"]
 "daemon/cli.py" = ["T20"]   # the CLI legitimately prints to stdout
 "daemon/main.py" = ["T20"]

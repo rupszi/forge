@@ -1,0 +1,28 @@
+[plugin]
+name = "git"
+version = "0.1.0"
+description = "Read-only git operations on the project worktree (status / log / diff / blame)"
+author = "Forge contributors"
+license = "MIT"
+schema_version = 1
+forge_min_version = "0.1.0"
+
+# No network — git is local. Filesystem scope is the worktree the
+# dispatcher passes via cwd; the plugin doesn't write outside it.
+# `exec` is empty because we shell out to ``git`` via the standard
+# library's ``subprocess`` rather than declaring it as a capability —
+# the dispatcher's filtered_subprocess_env still applies.
+[capabilities]
+network = []
+filesystem = ["${WORKTREE}"]
+exec = []
+secrets_read = []
+
+[limits]
+memory_mb = 256
+cpu_seconds = 30
+wall_seconds = 60
+
+[skill]
+when_to_use = "When the planner needs to inspect git history, working-tree status, or diffs without modifying them."
+entry_script = "scripts/main.py"
