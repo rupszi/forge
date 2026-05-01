@@ -1,0 +1,288 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "forge-orchestrator"
+description = "Multi-agent coding orchestrator that runs inside existing Claude Code projects, with persistent memory and open-weight LLM support"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Forge contributors" }]
+keywords = ["agent", "multi-agent", "claude-code", "ollama", "llm", "orchestrator"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development",
+]
+dynamic = ["version"]
+dependencies = [
+  "httpx>=0.25.0",
+  "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+# Tolerant JSON parsing for messy open-weight model outputs
+robust = ["baml-py>=0.50"]
+# Anthropic batch API executor (50% cheaper, async)
+batch = ["anthropic>=0.40"]
+# Repo-level retrieval (added Phase 1 Week 3).
+# Task 1.10: the current repomap.py (daemon/scanner/repomap.py) is regex-only
+# — no tree-sitter / networkx imports. The previous extras were a phantom
+# (would install but never get used). Reserved for a future
+# ``forge[repomap-precise]`` extra when we add an AST-backed implementation.
+repomap = []
+# Vector recall on the episodic store (added Phase 1 Week 4, optional)
+vector = ["sqlite-vec>=0.1"]
+# KB-as-MCP server export (added Phase 1 Week 6)
+mcp = ["mcp>=0.10"]
+
+[project.scripts]
+forge = "daemon.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yourorg/forge"
+Repository = "https://github.com/yourorg/forge"
+Issues = "https://github.com/yourorg/forge/issues"
+Changelog = "https://github.com/yourorg/forge/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+  "ruff>=0.8",
+  "pyright>=1.1.380",
+  "pre-commit>=4.0",
+  "pip-audit>=2.7",
+  "bandit>=1.7",
+]
+test = [
+  "pytest>=8.0",
+  "pytest-asyncio>=1.0",
+  "pytest-cov>=5.0",
+  "respx>=0.21",
+  "hypothesis>=6.110",
+  "syrupy>=4.7",
+  "time-machine>=2.16",
+]
+docs = [
+  # Deferred — markdown rendered by GitHub for v0.1
+  # "mkdocs-material>=9.5",
+  # "mkdocstrings[python]>=0.27",
+]
+
+# ---- Build / packaging ----
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "daemon/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["daemon"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "daemon",
+  "tests",
+  "docs",
+  "scripts",
+  "pyproject.toml",
+  "README.md",
+  "LICENSE",
+  "CHANGELOG.md",
+  "CLAUDE.md",
+]
+
+# ---- uv ----
+
+[tool.uv]
+package = true
+
+# ---- Ruff (lint + format) ----
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["daemon", "tests", "scripts"]
+exclude = [
+  ".venv",
+  "__pycache__",
+  ".pytest_cache",
+  ".ruff_cache",
+  "ui",
+  "node_modules",
+  ".next",
+  "build",
+  "dist",
+]
+
+[tool.ruff.lint]
+select = [
+  "E", "W",   # pycodestyle
+  "F",         # pyflakes
+  "I",         # isort
+  "B",         # flake8-bugbear
+  "UP",        # pyupgrade
+  "C4",        # flake8-comprehensions
+  "SIM",       # flake8-simplify
+  "RET",       # flake8-return
+  "PTH",       # flake8-use-pathlib (no os.path)
+  "TID",       # flake8-tidy-imports
+  "TC",        # flake8-type-checking
+  "ASYNC",     # CRITICAL — catches sync-in-async bugs
+  "S",         # flake8-bandit
+  "RUF",       # Ruff-native rules
+  "T20",       # flake8-print — no print() in committed code (use logging)
+  "G",         # logging format strings
+]
+ignore = [
+  "E501",      # line length — formatter handles it
+  "S101",      # assert is fine in tests
+  "S603",      # subprocess is intentional in Forge
+  "S404",      # subprocess import is intentional
+  "S607",      # subprocess paths are validated upstream
+  "S608",      # SQL string composition uses parameterized queries (manually verified)
+  "RUF013",    # implicit Optional too noisy; pyright catches the real bugs
+  "B008",      # function-call default args are common in dataclass-style code
+  "TID252",    # codebase uses relative imports consistently — both styles are valid
+  "RUF059",    # unused unpacked variables (e.g. `for k, _ in ...`) — false positives common
+  "RUF012",    # mutable class defaults — pre-existing pattern in dataclasses
+  "B007",      # unused loop var — fine for index loops
+  "E741",      # ambiguous var names (l, i, o) — only in pre-existing parser code; deferred
+  # ---- DEFERRED CLEANUP (existing code; track as Phase 0 hygiene tasks) ----
+  # Each of the codes below has 1 occurrence in pre-existing daemon code.
+  # Re-enable one at a time once the underlying call site is refactored.
+  "RUF005",    # 1× — list concat could use unpacking
+  "RUF006",    # 1× — ws_server.py:26 fire-and-forget asyncio task — fix in Phase 1 Week 4 hardening
+  "B023",      # 1× — function-in-loop closure capture — review during scheduler refactor
+  "B905",      # 1× — zip() without strict= — fine if lengths are guaranteed
+  "E731",      # 1× — ws_server.py lambda — convert to def in Phase 1 Week 4
+  "F841",      # 1× — unused local — review during cleanup
+  "S110",      # 1× — try/except/pass — already legit cleanup path
+  "ASYNC240",  # 1× daemon — sync I/O at startup is fine
+  "SIM105",    # 1× — could use contextlib.suppress
+  "SIM108",    # 1× — ternary instead of if/else
+  "SIM115",    # 1× — context manager for file open
+  "PTH120",    # 1× — leftover os.path.dirname; refactor with rest of PTH migration
+  "TC001",     # type-checking-only imports — false positives with `from __future__ import annotations`
+  "TC003",     # same
+  "RUF002",    # Unicode en-dashes / em-dashes in docstrings — used deliberately for readability
+  "RUF003",    # Unicode multiplication sign × in comments — used deliberately
+  "RUF001",    # Unicode in regular strings — same rationale (en dash, smart quotes)
+  "RET504",    # unnecessary intermediate assignment — sometimes clearer for debugging
+  "SIM103",    # return-the-negated stylistic preference; not always clearer
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests legitimately use sync os.path / open() in async bodies for setup/teardown,
+# and we don't enforce path/security rules in test scaffolding.
+"tests/**/*.py" = ["S", "B011", "T20", "PTH", "SIM117", "ASYNC230", "ASYNC240", "F841", "RUF005", "RUF006", "S110", "SIM105", "SIM108", "SIM115"]
+"scripts/**/*.py" = ["T20", "S", "PTH"]
+"daemon/cli.py" = ["T20"]   # the CLI legitimately prints to stdout
+"daemon/main.py" = ["T20"]
+"daemon/replay.py" = ["T20"]      # replay_to_stdout's purpose is to print events
+"daemon/mcp_server.py" = ["T20"]  # main() prints user-facing install help
+# Path migration in daemon/ is a planned refactor (Phase 1 follow-up); accept os.path for now.
+# PTH111 (expanduser) added 2026-05-01 with Task 1.4 — _validate_init_path
+# uses os.path.* deliberately to keep the comparison in string-space.
+"daemon/**/*.py" = ["PTH118", "PTH109", "PTH110", "PTH123", "PTH117", "PTH103", "PTH100", "PTH112", "PTH113", "PTH116", "PTH119", "PTH202", "PTH207", "PTH208", "PTH111"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["daemon"]
+combine-as-imports = true
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true
+line-ending = "lf"
+
+# ---- Pyright (type checking) ----
+
+[tool.pyright]
+include = ["daemon", "tests", "scripts"]
+exclude = [
+  "**/__pycache__",
+  ".venv",
+  "ui",
+  "node_modules",
+  "build",
+  "dist",
+]
+pythonVersion = "3.10"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = "warning"
+reportImplicitStringConcatenation = "warning"
+reportUnnecessaryIsInstance = "information"
+reportUnnecessaryTypeIgnoreComment = "warning"
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+
+# ---- pytest ----
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+  "-ra",
+  "--strict-markers",
+  "--strict-config",
+]
+markers = [
+  "slow: tests that take >1 s",
+  "integration: requires Ollama or claude CLI (gated)",
+  "unit: pure unit tests (default)",
+]
+filterwarnings = [
+  "ignore::pytest.PytestUnraisableExceptionWarning",
+  "ignore::DeprecationWarning:websockets.*",
+]
+
+# ---- Coverage ----
+
+[tool.coverage.run]
+branch = true
+source = ["daemon"]
+omit = [
+  "daemon/main.py",
+  "daemon/_version.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
+exclude_also = [
+  "raise NotImplementedError",
+  'if __name__ == "__main__":',
+  "if TYPE_CHECKING:",
+  "@(abc\\.)?abstractmethod",
+  "\\.\\.\\.",
+  "pragma: no cover",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# ---- Bandit (weekly standalone CI scan) ----
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "ui", "docs", "scripts"]
+skips = [
+  "B101",  # assert in tests is fine
+  "B404",  # subprocess import is intentional
+  "B603",  # subprocess called without shell — explicitly chosen
+  "B607",  # partial executable paths are validated upstream
+  "B608",  # SQL composition uses parameterized queries (manually verified)
+]
