@@ -12,8 +12,13 @@ paths = [
   '''docs/research/.*\.md$''',
   '''CHANGELOG\.md$''',
   '''docs/BUILD_PLAN\.md$''',
+  '''docs/EXECUTION_PLAN\.md$''',
   '''tests/data/.*\.json$''',
   '''tests/fixtures/.*\.py$''',
+  # Test files contain fake credential fixtures by definition
+  # (e.g., tests/test_redact.py asserts that "ver_live_xxxxx..." gets
+  # redacted; the string IS the test). Allowlist all test_*.py files.
+  '''tests/test_.*\.py$''',
 ]
 regexes = [
   # Example Anthropic message IDs in docs
