@@ -48,6 +48,10 @@ class EventType(str, Enum):
     SESSION_PLAN_ONLY = "session.plan_only"
     # Sprint 6.2: emitted when bypass mode is active for a session.
     SESSION_BYPASS = "session.bypass"
+    # Sprint 7.1: emitted when a hook (SessionStart / PreToolUse / ...)
+    # blocks an operation. The reason field carries the hook's structured
+    # rejection so `forge replay` can show what fired.
+    SESSION_HOOK_BLOCKED = "session.hook_blocked"
 
     # ---- Repomap (built once per session at start) ----
     REPOMAP_BUILT = "repomap.built"

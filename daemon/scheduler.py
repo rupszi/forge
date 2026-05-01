@@ -427,6 +427,39 @@ async def execute_session(
 
     _emit_session(EventType.SESSION_START.value, objective=objective, project_path=ctx.path)
 
+    # ---- Sprint 7.1: SessionStart hooks ----
+    #
+    # User-supplied scripts in .forge/hooks.toml can fire here to
+    # inject project-specific context (e.g., load CI status, fetch
+    # recent PR descriptions). A blocking SessionStart hook aborts
+    # the session before any tokens are spent.
+    from pathlib import Path as _Path
+
+    from . import hooks as _hooks
+
+    _hooks_cfg = _Path(ctx.path or ".") / ".forge" / "hooks.toml"
+    if _hooks_cfg.is_file():
+        try:
+            _hook_results = await _hooks.run_hooks(
+                "SessionStart",
+                {"session_id": session.id, "objective": objective, "cwd": ctx.path},
+                config_path=_hooks_cfg,
+                target=objective,
+            )
+            blocker = _hooks.has_blocking_result(_hook_results)
+            if blocker is not None:
+                logger.warning("SessionStart hook blocked: %s", blocker.reason)
+                _emit_session(
+                    EventType.SESSION_HOOK_BLOCKED.value,
+                    event_name="SessionStart",
+                    reason=blocker.reason,
+                )
+                session.ended_at = SprintContract().created_at
+                db.save_session(session)
+                return session
+        except Exception as e:  # hooks must never crash the daemon
+            logger.warning("SessionStart hooks raised, ignoring: %s", e)
+
     # ---- Build repomap (Phase 1 Week 3) ----
     #
     # Cap at 1500 tokens per ADR-002; the actual generator prompt builder
