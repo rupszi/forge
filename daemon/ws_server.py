@@ -26,12 +26,28 @@ from .budget import BudgetController
 from .config import WS_HOST, WS_PORT
 from .db import ForgeDB
 from .memory.knowledge import KnowledgeBase
+from .mode import InvalidMode, ModeState
 from .models import ProjectContext
 from .scanner.project import scan_project
 
 logger = logging.getLogger(__name__)
 
 _clients: set = set()
+
+# Sprint 6.2: process-wide mode state. The WS server mutates it via
+# ``set_mode``; the scheduler reads it at session start; the TUI / UI
+# subscribe to ``mode_changed`` events to keep their status bars in sync.
+# Single instance — Forge is single-tenant by design (ADR-007).
+_mode_state = ModeState()
+
+
+def get_mode_state() -> ModeState:
+    """Public accessor for the daemon's mode state singleton.
+
+    Used by ``cmd_serve`` to thread the same instance into
+    ``scheduler.execute_session`` so UI flips propagate to running waves.
+    """
+    return _mode_state
 
 
 # ---- Per-client rate limiting + size cap (Task 1.4) ----
@@ -198,11 +214,19 @@ async def _handle_message_inner(
     # daemon/skills/.
 
     if msg_type == "set_mode":
-        # Persist the mode on the BudgetController for now; dedicated
-        # session-state object is Sprint 6 work. Mode enforcement at the
-        # scheduler boundary is also Sprint 6.
-        budget._mode = msg.get("mode", "auto")  # type: ignore[attr-defined]
-        return {"type": "mode_changed", "mode": budget._mode}  # type: ignore[attr-defined]
+        # Sprint 6.2: process-wide ModeState. ``plan`` causes the scheduler
+        # to skip the wave loop, ``ask`` injects an addendum into the
+        # generator prompt, ``bypass`` logs an audit warning. Unknown modes
+        # are rejected explicitly rather than silently falling back, so a
+        # buggy UI surfaces the mistake instead of running with the wrong mode.
+        try:
+            new_mode = _mode_state.set(msg.get("mode", "auto"))
+        except InvalidMode as e:
+            return {"type": "error", "error": str(e)}
+        # Broadcast so other connected clients (TUI alongside the browser)
+        # update their status bars in lockstep.
+        broadcast({"type": "mode_changed", "mode": new_mode})
+        return {"type": "mode_changed", "mode": new_mode}
 
     if msg_type == "set_model":
         # Front-end model switch. The actual routing happens at sprint

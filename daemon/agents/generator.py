@@ -69,6 +69,7 @@ def _build_prompt(
     revision_feedback: str = "",
     *,
     target_model: str = "",
+    mode: str = "auto",
 ) -> str:
     """Assemble the full prompt with prompt-cache-friendly ordering.
 
@@ -92,6 +93,14 @@ def _build_prompt(
     # ``variable_suffix`` (task + criteria + feedback). Truncation only ever
     # touches the prefix; the suffix is sacred.
     prefix_parts: list[str] = []
+    # Mode addendum is stable per-mode and goes at the front of the prefix
+    # so the cacheable boundary stays the same for ``auto`` runs (which
+    # produce an empty addendum). See daemon/mode.py::mode_prompt_addendum.
+    from ..mode import mode_prompt_addendum
+
+    addendum = mode_prompt_addendum(mode)
+    if addendum:
+        prefix_parts.append(addendum)
     if memory_context:
         prefix_parts.append(memory_context)
     if repomap:
@@ -170,6 +179,7 @@ async def generate(
     *,
     repomap: str = "",
     revision_feedback: str = "",
+    mode: str = "auto",
 ) -> ExecutionResult:
     """Execute a sprint in a worktree. Do NOT self-evaluate.
 
@@ -206,6 +216,7 @@ async def generate(
         repomap=repomap,
         revision_feedback=revision_feedback,
         target_model=sprint.assigned_model,
+        mode=mode,
     )
 
     executor = _select_executor(sprint)

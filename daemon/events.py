@@ -43,6 +43,11 @@ class EventType(str, Enum):
     # ---- Session lifecycle ----
     SESSION_START = "session.start"
     SESSION_COMPLETE = "session.complete"
+    # Sprint 6.2: emitted when execute_session returns after planning
+    # without running waves (plan-only mode picker).
+    SESSION_PLAN_ONLY = "session.plan_only"
+    # Sprint 6.2: emitted when bypass mode is active for a session.
+    SESSION_BYPASS = "session.bypass"
 
     # ---- Repomap (built once per session at start) ----
     REPOMAP_BUILT = "repomap.built"

@@ -45,6 +45,7 @@ from .db import ForgeDB
 from .events import EventType
 from .memory.episodic import EpisodicStore
 from .memory.retriever import Retriever
+from .mode import ModeState
 from .models import EvaluatorResult, ExecutionResult, ProjectContext, Session, SprintContract
 from .scanner.repomap import build_repomap
 
@@ -128,6 +129,8 @@ async def _run_one_attempt(
     memory: str,
     repomap: str,
     revision_feedback: str = "",
+    *,
+    mode: str = "auto",
 ) -> tuple[ExecutionResult, EvaluatorResult]:
     """Run one generate→evaluate cycle.
 
@@ -141,6 +144,7 @@ async def _run_one_attempt(
         worktree_path=wt_path,
         repomap=repomap,
         revision_feedback=revision_feedback,
+        mode=mode,
     )
 
     if not gen_result.success:
@@ -167,6 +171,7 @@ async def execute_sprint(
     broadcast: Callable | None = None,
     *,
     repomap: str = "",
+    mode_state: ModeState | None = None,
 ) -> SprintContract:
     """Execute one sprint: generate → evaluate → revise (≤MAX_REVISIONS) → done.
 
@@ -175,8 +180,14 @@ async def execute_sprint(
       - ADaPT recovery on `MAX_REVISIONS` exhaustion (recursive decomposition)
       - Procedural-memory writeback after every verdict
       - Trace event emission at every transition
+
+    ``mode_state`` (Sprint 6.2) is read once at the top of the sprint
+    loop; we pass the snapshotted ``current_mode`` to each attempt so a
+    mid-sprint mode flip from the UI doesn't break invariants in flight.
     """
     import time
+
+    current_mode = (mode_state or ModeState()).mode
 
     def _emit(typ: str, **data):
         """Convenience wrapper — emit to both the WebSocket broadcast and the
@@ -238,7 +249,7 @@ async def execute_sprint(
         _emit(EventType.RECOVERY_CONSISTENCY_START.value, reason="critical sprint")
 
         async def _attempt(_sprint, _i):
-            return await _run_one_attempt(_sprint, ctx, wt_path, memory, repomap)
+            return await _run_one_attempt(_sprint, ctx, wt_path, memory, repomap, mode=current_mode)
 
         consistency_result = await recovery.self_consistent_run(sprint, n=3, run_attempt=_attempt)
         winner = consistency_result.winner
@@ -282,7 +293,7 @@ async def execute_sprint(
             )
 
         gen_result, eval_result = await _run_one_attempt(
-            sprint, ctx, wt_path, memory, repomap, revision_feedback
+            sprint, ctx, wt_path, memory, repomap, revision_feedback, mode=current_mode
         )
         budget.record_spend(gen_result.cost_usd + eval_result.cost_usd)
         last_gen_result = gen_result
@@ -333,7 +344,9 @@ async def execute_sprint(
             sub_wt_path = await worktree.create(sub.id)
             sub.assigned_worktree = sub_wt_path
             sub_memory = retriever.get_context_for_task(sub.description)
-            return await _run_one_attempt(sub, ctx, sub_wt_path, sub_memory, repomap)
+            return await _run_one_attempt(
+                sub, ctx, sub_wt_path, sub_memory, repomap, mode=current_mode
+            )
 
         decomp = await recovery.adapt_failed_sprint(sprint, run_subsprint=_run_subsprint)
         _emit(EventType.RECOVERY_ADAPT_COMPLETE.value, verdict=decomp.final_verdict)
@@ -374,13 +387,25 @@ async def execute_session(
     budget: BudgetController,
     broadcast: Callable | None = None,
     use_local_planner: bool = True,
+    *,
+    mode_state: ModeState | None = None,
 ) -> Session:
     """Full session: plan → generate → evaluate → learn.
 
     Builds the repomap once at session start (per ADR-002 — repomap is
     expensive and stable; rebuild only on `forge init` or major file
     changes). Emits trace events at every phase transition.
+
+    ``mode_state`` (Sprint 6.2) gates the wave-execution phase: in
+    ``plan`` mode the planner runs and persists the sprint contracts,
+    but the wave loop is skipped — the user reviews in the UI and
+    flips to ``auto`` to run. ``bypass`` mode is logged loudly. Other
+    modes (auto / accept_edits / ask) execute waves normally; ``ask``
+    additionally injects a prompt addendum at the generator boundary
+    (handled by ``generator.generate``).
     """
+    if mode_state is None:
+        mode_state = ModeState()
     session = Session(
         project_path=ctx.path,
         objective=objective,
@@ -428,6 +453,36 @@ async def execute_session(
     _emit_session(EventType.PLAN_CREATED.value, sprint_count=len(sprints))
     _broadcast({"type": "plan_created", "sprints": [s.to_dict() for s in sprints]})
 
+    # ---- Sprint 6.2: mode gate ----
+    #
+    # In ``plan`` mode the user wants to review before any code runs. We
+    # emit a lifecycle event explaining the early return and stop here —
+    # the planner output is already persisted via db.save_sprint above
+    # so the user can flip to auto and run the same plan with no replan.
+    if mode_state.is_plan_only():
+        logger.info("plan-only mode: skipping wave execution; %d sprints await user", len(sprints))
+        _emit_session(EventType.SESSION_PLAN_ONLY.value, sprint_count=len(sprints))
+        session.ended_at = SprintContract().created_at
+        db.save_session(session)
+        _broadcast(
+            {
+                "type": "session_complete",
+                "session": session.to_dict(),
+                "plan_only": True,
+            }
+        )
+        return session
+
+    if mode_state.is_bypass():
+        # No real "bypass" surface for the daemon to skip yet — log loudly
+        # so the audit trail and `forge replay` show that the user explicitly
+        # chose this. When per-tool checkpoints land in Sprint 7 they branch
+        # on ModeState.is_bypass() to decide whether to prompt.
+        logger.warning(
+            "BYPASS mode active for session %s — capability prompts suppressed", session.id
+        )
+        _emit_session(EventType.SESSION_BYPASS.value, session_id=session.id)
+
     # ---- Phase 2: Execute waves ----
 
     for wave_idx, wave in enumerate(dependency_waves(sprints)):
@@ -459,6 +514,7 @@ async def execute_session(
                     episodic,
                     _broadcast,
                     repomap=repomap,
+                    mode_state=mode_state,
                 )
 
         results = await asyncio.gather(*[_run(s) for s in wave], return_exceptions=True)
