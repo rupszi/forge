@@ -248,7 +248,33 @@ py_ver="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_
 py_major="${py_ver%%.*}"
 py_minor="${py_ver##*.}"
 if [[ "$py_major" -lt 3 ]] || { [[ "$py_major" -eq 3 ]] && [[ "$py_minor" -lt 10 ]]; }; then
-  die "Python ${py_ver} found; ${MIN_PYTHON}+ required. Install via uv, pyenv, or brew." 2
+  err "Python ${py_ver} found; ${MIN_PYTHON}+ required."
+  cat >&2 <<EOM
+
+  Three quick fixes (pick one — Option 3 is the safest):
+
+    Option 1 — homebrew global symlink (fastest; touches /opt/homebrew)
+      brew install python@3.12
+      brew link --force --overwrite python@3.12
+
+    Option 2 — alias only (no filesystem changes; affects interactive shells)
+      brew install python@3.12
+      echo 'alias python3=python3.12' >> ~/.zshrc
+      echo 'alias python=python3.12' >> ~/.zshrc
+      source ~/.zshrc
+
+    Option 3 — local symlink (recommended; reversible, no system pollution)
+      brew install python@3.12
+      mkdir -p ~/.local/bin
+      ln -sf "\$(brew --prefix python@3.12)/bin/python3.12" ~/.local/bin/python3
+      ln -sf "\$(brew --prefix python@3.12)/bin/python3.12" ~/.local/bin/python
+      echo 'export PATH="\$HOME/.local/bin:\$PATH"' >> ~/.zshrc
+      source ~/.zshrc
+
+  Then re-run: bash install.sh
+
+EOM
+  exit 2
 fi
 ok "Python: $py_ver"
 
@@ -504,12 +530,22 @@ else
   fi
 fi
 
-# Install Forge
-info "Installing Forge…"
+# Install Forge with dev dependencies. The dev extra (pytest / ruff /
+# pre-commit / editables / hatch-vcs / hatchling) is required for a
+# working contributor checkout. End-users not running tests can pass
+# --no-dev to skip; default is "include them" because the cost is small
+# and the failure mode (missing pytest after install) is bad UX.
+INSTALL_TARGET=".[dev]"
+if [[ "${FORGE_NO_DEV:-0}" == "1" ]]; then
+  INSTALL_TARGET="."
+  info "FORGE_NO_DEV=1 — skipping dev extras"
+fi
+
+info "Installing Forge ($INSTALL_TARGET)…"
 if command -v uv >/dev/null 2>&1; then
-  uv pip install --python .venv/bin/python -e . 2>&1 | tee -a "$LOG_FILE" || die "Forge install failed" 5
+  uv pip install --python .venv/bin/python -e "$INSTALL_TARGET" 2>&1 | tee -a "$LOG_FILE" || die "Forge install failed" 5
 else
-  .venv/bin/pip install -e . 2>&1 | tee -a "$LOG_FILE" || die "Forge install failed" 5
+  .venv/bin/pip install -e "$INSTALL_TARGET" 2>&1 | tee -a "$LOG_FILE" || die "Forge install failed" 5
 fi
 
 # Optional extras
