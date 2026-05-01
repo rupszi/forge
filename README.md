@@ -4,6 +4,7 @@
 [![Python: 3.10+](https://img.shields.io/badge/python-3.10+-green.svg)](pyproject.toml)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
 [![No telemetry](https://img.shields.io/badge/telemetry-none-success.svg)](docs/DECISIONS.md)
+[![Tests: 644 passing](https://img.shields.io/badge/tests-644%20passing-success.svg)]()
 
 > **Free. MIT. Local-first. No telemetry. No signup. No API key required.**
 
@@ -15,19 +16,21 @@ Think of it as **"Claude Code with a persistent brain that runs locally on open 
 
 ## What's different about Forge
 
-| | Forge | Aider | OpenHands | Cursor | Claude Code | Composio AO | Devin |
-|---|---|---|---|---|---|---|---|
-| **Runs on open-weight LLMs by default** | ✅ | ⚠️ BYO | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Three-agent harness** (planner/generator/evaluator) | ✅ | ❌ | ⚠️ | ✅ | ⚠️ | ✅ | ✅ |
-| **Cross-family evaluator** (different model from generator) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Persistent KB across sessions** with confidence/decay | ✅ | ❌ | ⚠️ | ⚠️ | ⚠️ | ❌ | ✅ |
-| **Procedural memory** (routing learns over time) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| **Done-criteria contracts** (each criterion graded independently) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ |
-| **MCP-bidirectional** (consume + expose KB) | ✅ | ❌ | ❌ | ⚠️ | ⚠️ | ❌ | ❌ |
-| **Local-first; no telemetry** | ✅ | ✅ | ⚠️ | ❌ | ✅ | ✅ | ❌ |
-| **MIT / Apache 2.0** | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| | Forge | Aider | OpenHands | Cursor 3 | Claude Code | Composio AO | Devin v3 | OpenClaw |
+|---|---|---|---|---|---|---|---|---|
+| **Open-weight default** | ✅ | ⚠️ BYO | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Three-agent harness** (planner/generator/evaluator) | ✅ | ❌ | ⚠️ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ symmetric |
+| **Cross-family evaluator** (different model from generator) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Persistent KB** with confidence/decay across sessions | ✅ | ❌ | ⚠️ | ⚠️ | ⚠️ | ❌ | ✅ | ❌ |
+| **Procedural memory** (routing learns over time) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| **Done-criteria contracts** (each criterion graded with evidence) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ | ❌ vote-based |
+| **MCP-bidirectional** (consume + expose KB) | ✅ | ❌ | ❌ | ⚠️ | ⚠️ | ❌ | ❌ | ⚠️ consume |
+| **Local-first; no telemetry** | ✅ | ✅ | ⚠️ | ❌ | ✅ | ✅ | ❌ | ✅ |
+| **MIT / Apache 2.0** | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ |
+| **Skills sandbox** (per-skill capability scoping + isolation) | ✅ | ❌ | ⚠️ Docker | ❌ | ⚠️ permission-mode | ❌ | ❌ | ❌ |
+| **Connector ecosystem** (MCP + native plugins) | ✅ | ❌ | ⚠️ | ⚠️ | ✅ via MCP | ❌ | ❌ | ⚠️ |
 
-See [docs/COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) for the full head-to-head with 18 competitors.
+See [docs/COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) for the full head-to-head with 18+ competitors including a deep-dive on OpenClaw.
 
 ## How it works
 
@@ -56,34 +59,32 @@ Memory injection is surgical — the retriever pulls the 3–5 most relevant ite
 | 32 GB+ M-series / RTX 4090 | ✅ comfortable with parallel sprints |
 | Multi-GPU server | ✅ Qwen3-Coder-480B / DeepSeek V4 full for SOTA quality |
 
-## Quickstart
+## Quickstart — one-shot install
 
 ```bash
-# 1. Install uv (the workflow tool — fast, manages Python)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 2. Install Ollama and pull the default models
-brew install ollama && ollama serve   # in one terminal
-ollama pull gpt-oss:20b               # ~14 GB — planner
-ollama pull qwen3-coder-next          # ~50 GB MoE — cheap-tier generator
-ollama pull qwen3.6:27b               # ~16 GB — medium-tier generator
-ollama pull deepseek-v4-flash         # ~13 GB — premium-tier generator
-ollama pull nomic-embed-text          # ~270 MB — episodic vector recall
-
-# 3. Clone Forge and set up
-git clone https://github.com/<your-org>/forge.git
-cd forge
-./setup.sh
-
-# 4. Initialize in your existing project
+# Inside your existing project directory:
 cd ~/projects/my-webapp
-forge init    # scans .claude/, package.json, detects stack + MCP
-
-# 5. Start the dashboard
-forge serve   # → http://localhost:3000
+bash install.sh             # interactive install + Ollama model pulls
+# or
+bash install.sh --check     # dry-run; verify environment, change nothing
+bash install.sh --yes       # non-interactive (CI / Docker)
+bash install.sh upgrade     # reuse existing .venv, pull latest
 ```
 
-That's it. No Anthropic API key required. No signup. No telemetry. The KB lives in `.forge/forge.db` in your project; it never leaves your machine.
+The installer:
+
+1. Verifies OS (macOS / Linux / WSL), Python ≥3.10, ≥16 GB RAM, ≥120 GB disk
+2. Prints the **anti-corruption contract** (Forge writes only to `.forge/`, appends one line to `.gitignore`, never edits your source)
+3. Installs Ollama if missing; starts the daemon if not running
+4. Lists required models with sizes; offers interactive download (resume-friendly)
+5. Sets up `.venv` via `uv` (or pip fallback) and installs `forge`
+6. Prompts for optional extras (`forge[robust|batch|vector|mcp]`)
+7. Adds `.forge/` to `.gitignore`; symlinks `forge` to `~/.local/bin` if on PATH
+8. Runs `forge doctor` to validate everything works
+
+That's it. No Anthropic API key required. No signup. No telemetry. The KB lives in `.forge/forge.db` in your project; it never leaves your machine. See [INSTALL.md](INSTALL.md) for detailed install / troubleshooting.
+
+To uninstall: `bash uninstall.sh` (KB preserved by default; pass `--with-data` to also remove `.forge/`).
 
 ## CLI commands
 
@@ -106,6 +107,12 @@ forge memory import                      Import from Claude Code auto-memory
 forge research "next.js middleware auth" Manual web research
 forge review sprint-a1f3                 Run multi-perspective review
 forge replay session-abc123              Replay a session from its trace.jsonl
+forge connectors list                    List configured tool connectors
+forge connectors add github              Add a new connector via MCP or native plugin
+forge skills list                        List installed skills
+forge skills install <skill-name>        Install a skill (sandboxed, capability-scoped)
+forge llms list                          List configured LLM providers
+forge llms add <provider>                Add a new LLM provider
 forge reset                              Clear tasks (keep knowledge base)
 forge serve                              Start daemon + open browser dashboard
 ```
@@ -134,33 +141,83 @@ Forge Daemon (Python, asyncio)
     ├── Budget Controller  spend cap + model downgrade cascade
     ├── Worktree Manager   git worktree lifecycle
     ├── Merge Gate         diff review + evaluator sign-off
-    └── KB-as-MCP Server   exposes Forge's KB as an MCP server to other tools
+    ├── KB-as-MCP Server   exposes Forge's KB as an MCP server to other tools
+    ├── Connectors         MCP-first; native plugins for storage/email/git/CI/etc.
+    ├── Skills Sandbox     subprocess-isolated, capability-scoped, signed manifest
+    └── LLM Registry       pluggable model providers (Anthropic / OpenAI / Ollama / vLLM / custom)
 ```
 
 Each generator runs as `claude -p "<prompt>"` (or `ollama run …` / `vllm` HTTP) inside an isolated git worktree, inheriting all MCP connections and CLAUDE.md instructions from the project.
 
+## Connectors and plugins
+
+Forge speaks **MCP first** — anything with an MCP server is one config line away. For tools that don't have an MCP server (or need richer integration), the **native plugin API** lets contributors ship Python connectors with declared capabilities.
+
+Out-of-the-box connectors (see [docs/CONNECTORS.md](docs/CONNECTORS.md)):
+
+- **Git/GitHub/GitLab** — PR creation, issue triage, CI status
+- **Storage** — S3 / GCS / Cloudflare R2 / Supabase Storage
+- **Email** — SendGrid / Resend / Postmark / AWS SES
+- **Deployment** — Vercel / Netlify / Cloudflare Pages
+- **Database** — Supabase / Neon / Postgres / SQLite
+- **Comms** — Slack / Discord / Linear (via MCP)
+- **Monitoring** — Sentry / Datadog / Posthog
+- **Auth** — Clerk / Auth0 / Supabase Auth
+
+Build your own: [docs/PLUGIN_DEVELOPMENT.md](docs/PLUGIN_DEVELOPMENT.md).
+
+## Skills (Claude-Code-compatible, sandboxed)
+
+Forge supports **Claude-Code-compatible skills** — markdown-based agent capabilities that ship as a directory with a manifest, scripts, and references. **Every skill runs in a sandbox**:
+
+- Subprocess isolation (no shared Python interpreter)
+- Capability declaration in `manifest.toml` (network / filesystem / exec scopes)
+- Signed manifest verification before first run
+- Per-skill resource limits (CPU / memory / wall time)
+- All filesystem access scoped to the worktree
+- Network egress allow-listed per skill
+
+See [docs/SKILLS.md](docs/SKILLS.md) for the security model and [docs/PLUGIN_DEVELOPMENT.md](docs/PLUGIN_DEVELOPMENT.md) for authoring guides.
+
+## Adding more LLMs
+
+Forge ships with adapters for Anthropic, OpenAI-compatible (vLLM / SGLang / OpenRouter / Together), and Ollama. Adding a new provider is one file in `daemon/llms/` plus a registry entry. See [docs/LLMS.md](docs/LLMS.md).
+
 ## Dependencies
 
-Runtime: `httpx`, `websockets`, `tree-sitter` (for repomap), `networkx` (PageRank in repomap), and the user's choice of model backend (Ollama, vLLM, claude-code).
+Runtime: `httpx`, `websockets`. That's it. Optional: `tree-sitter` (for AST repomap), `networkx` (PageRank in repomap), and the user's choice of model backend (Ollama, vLLM, claude-code).
+
 Dev: `pytest`, `ruff`, `pyright`, `pre-commit`, `respx`, `hypothesis`, `syrupy`.
+
 Optional extras: `forge[robust]` (BAML tolerant parsing), `forge[batch]` (Anthropic batch API), `forge[vector]` (sqlite-vec), `forge[mcp]` (KB-as-MCP).
 
 No agent frameworks. No LangChain. No CrewAI. See [docs/DECISIONS.md ADR-011](docs/DECISIONS.md).
 
 ## Documentation
 
-- [BUILD_PLAN.md](docs/BUILD_PLAN.md) — 14-week tracker (currently in Phase 1)
-- [ENGINEERING_STANDARDS.md](docs/ENGINEERING_STANDARDS.md) — pre-push gate, schema parity, async patterns
-- [DECISIONS.md](docs/DECISIONS.md) — locked ADRs
-- [COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) — head-to-head with 18 competitors
-- [Architecture](docs/architecture.md), [Memory System](docs/memory-system.md), [Harness Design](docs/harness-design.md), [Security](docs/security.md), [Configuration](docs/configuration.md)
-- [Research notes](docs/research/notes/) — six raw research notes + April-30 freshness check
+- **[INSTALL.md](INSTALL.md)** — detailed install + troubleshooting
+- **[docs/CONNECTORS.md](docs/CONNECTORS.md)** — tool integrations (MCP + native plugins)
+- **[docs/SKILLS.md](docs/SKILLS.md)** — skills system + security sandbox
+- **[docs/PLUGIN_DEVELOPMENT.md](docs/PLUGIN_DEVELOPMENT.md)** — building your own connector or skill
+- **[docs/LLMS.md](docs/LLMS.md)** — adding new model providers
+- **[docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md)** — threat model + audit findings (12 attack classes covered)
+- **[docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md)** — release gates + remaining work
+- [docs/architecture.md](docs/architecture.md) — daemon structure, three-agent pattern
+- [docs/memory-system.md](docs/memory-system.md) — four-tier KB design
+- [docs/harness-design.md](docs/harness-design.md) — planner/generator/evaluator contracts
+- [docs/configuration.md](docs/configuration.md) — env vars, paths
+- [docs/COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) — head-to-head with 18+ competitors (incl. OpenClaw deep-dive)
+- [docs/DECISIONS.md](docs/DECISIONS.md) — locked ADRs
+- [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) — 14-week tracker
+- [docs/ENGINEERING_STANDARDS.md](docs/ENGINEERING_STANDARDS.md) — pre-push gate, schema parity, async patterns
+- [docs/EXECUTION_PLAN.md](docs/EXECUTION_PLAN.md) — code-review fix tracker
+- [docs/research/notes/](docs/research/notes/) — raw research notes
 
 ## Status
 
-Forge is currently **alpha** — Phase 1 of a 14-week build plan. The existing 243-test suite is green; engineering perimeter (pre-push gate, CI, lint, types, schema-parity script) is in place. The first launchable release is `v0.1.0` targeting end of Phase 3 (~12 weeks out).
+Forge is currently **alpha** — Phase 1 of a 14-week build plan. The 644-test suite is green; engineering perimeter (pre-push gate, CI, lint, types, schema-parity script, redaction at 5 boundaries, EventType enum, atomic budget reservation) is in place. The first launchable release is `v0.1.0` targeting end of Phase 3 (~12 weeks out).
 
-Hard kill criterion: if Forge can't reach **≥30% on a 50-task SWE-bench Verified subset** using the open-weight stack by Phase 2 Week 8, the open-weight thesis fails and we pivot or shut down. See [docs/DECISIONS.md ADR-015](docs/DECISIONS.md#adr-015--week-8-swe-bench-verified-30-on-50-task-subset--hard-kill-criterion).
+Hard kill criterion: if Forge can't reach **≥30% on a 50-task SWE-bench Verified subset** using the open-weight stack by Phase 2 Week 8, the open-weight thesis fails and we pivot or shut down. See [docs/DECISIONS.md ADR-015](docs/DECISIONS.md).
 
 ## Contributing
 
@@ -172,7 +229,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Every PR runs the local pre-push gate be
 
 ## Security
 
-For security issues, see [SECURITY.md](SECURITY.md) — do not open a public GitHub issue.
+For security issues, see [SECURITY.md](SECURITY.md) — do not open a public GitHub issue. The full threat model and audit findings live in [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md).
 
 ## Sustainability
 
