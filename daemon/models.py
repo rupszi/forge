@@ -151,6 +151,10 @@ class ProjectContext:
     mcp_servers: list[MCPServer] = field(default_factory=list)
     claude_rules: list[str] = field(default_factory=list)
     claude_auto_memory: list[str] = field(default_factory=list)
+    # Sprint 7.4: AGENTS.md root-to-leaf chain. Each entry is
+    # (relative_path, content) — the planner injects each as a separate
+    # context block so the model attributes guidance to its origin dir.
+    agents_md: list[tuple[str, str]] = field(default_factory=list)
     available_tools: dict[str, bool] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -168,6 +172,7 @@ class ProjectContext:
             ],
             "claude_rules_count": len(self.claude_rules),
             "auto_memory_count": len(self.claude_auto_memory),
+            "agents_md_count": len(self.agents_md),
             "available_tools": self.available_tools,
         }
 

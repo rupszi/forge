@@ -5,7 +5,13 @@ import json
 from pathlib import Path
 
 from ..models import ProjectContext
-from .claude_code import read_auto_memory, read_claude_md, read_claude_rules, read_mcp_config
+from .claude_code import (
+    read_agents_md,
+    read_auto_memory,
+    read_claude_md,
+    read_claude_rules,
+    read_mcp_config,
+)
 from .tools import detect_tools
 
 
@@ -147,6 +153,11 @@ async def scan_project(path: str) -> ProjectContext:
     memory_path = Path.home() / ".claude" / "projects" / project_hash / "memory"
     if memory_path.exists():
         ctx.claude_auto_memory = read_auto_memory(str(memory_path))
+
+    # 4b. AGENTS.md root-to-leaf walk (Sprint 7.4). Empty list when the
+    # project doesn't use the convention — this is alongside CLAUDE.md,
+    # not a replacement.
+    ctx.agents_md = read_agents_md(path)
 
     # 5. Available CLIs
     ctx.available_tools = detect_tools()
