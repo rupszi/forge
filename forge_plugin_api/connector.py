@@ -112,15 +112,19 @@ class Connector:
     def http_client(self):
         """Return an httpx.AsyncClient enforcing the network allow-list.
 
-        Default implementation is a placeholder; the sandbox runtime
-        overrides this with a hardened factory before the connector
-        runs. If a plugin author overrides ``http_client`` directly,
-        the override MUST also enforce the allow-list — failing to do
-        so is a capability violation logged to the audit trail.
-        """
-        import httpx
+        Default implementation reads ``FORGE_NETWORK_ALLOWLIST`` from
+        the env (set by ``daemon/skills/runtime.py::run_skill``) and
+        returns a ``GuardedAsyncClient`` that vetoes non-allowlisted
+        hosts before the network call fires.
 
-        return httpx.AsyncClient(timeout=30.0)
+        Plugin authors who override this method MUST also enforce the
+        allow-list — failing to do so is a capability violation logged
+        to the audit trail. The recommended pattern is to call
+        ``make_http_client()`` and add per-route customization on top.
+        """
+        from .http import make_http_client
+
+        return make_http_client(timeout=30.0)
 
     @classmethod
     def _list_tools(cls) -> list[dict[str, Any]]:

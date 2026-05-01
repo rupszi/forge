@@ -20,18 +20,22 @@ Versioning policy: any breaking change to a public symbol bumps the
 from __future__ import annotations
 
 from .connector import Connector, Tool, ToolResult
+from .http import CapabilityViolation, GuardedAsyncClient, make_http_client
 from .llm import GenerationRequest, GenerationResult, LLMAdapter
 
 __version__ = "0.1.0"
 __schema_version__ = 1
 
 __all__ = [
+    "CapabilityViolation",
     "Connector",
     "GenerationRequest",
     "GenerationResult",
+    "GuardedAsyncClient",
     "LLMAdapter",
     "Tool",
     "ToolResult",
     "__schema_version__",
     "__version__",
+    "make_http_client",
 ]

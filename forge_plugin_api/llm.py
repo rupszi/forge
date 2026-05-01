@@ -94,9 +94,12 @@ class LLMAdapter:
         """Return an httpx.AsyncClient enforcing the network allow-list.
 
         See ``forge_plugin_api.connector.Connector.http_client`` for the
-        same lifecycle — the sandbox runtime overrides this method
-        before the adapter runs.
+        same lifecycle — the sandbox runtime sets the
+        ``FORGE_NETWORK_ALLOWLIST`` env var and the default factory
+        reads it. Override only if you need to wrap the client further
+        (e.g. retries, rate limit headers); call ``make_http_client()``
+        as the base.
         """
-        import httpx
+        from .http import make_http_client
 
-        return httpx.AsyncClient(timeout=120.0)
+        return make_http_client(timeout=120.0)
