@@ -347,6 +347,21 @@ def cmd_reset(args):
     db.close()
 
 
+def cmd_tui(args):
+    """Launch the terminal UI — Sprint 6.5.
+
+    Same WebSocket interface as ``forge serve``'s dashboard; both can
+    run simultaneously. The TUI is the Claude-Code/Codex-style terminal
+    surface — works over SSH, no browser required.
+
+    Requires the optional ``[tui]`` extra (textual + rich). The
+    daemon-side ``forge serve`` does NOT need it; only this command does.
+    """
+    from .tui import run_tui
+
+    return run_tui()
+
+
 def cmd_wizard(args):
     """Launch the first-run connector setup wizard.
 
@@ -462,6 +477,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="Check dependencies")
     sub.add_parser("budget", help="Show budget")
     sub.add_parser("serve", help="Start daemon + dashboard")
+    sub.add_parser(
+        "tui",
+        help="Launch the Textual terminal UI (Codex/Claude-Code-style; needs forge[tui] extra)",
+    )
     sub.add_parser("reset", help="Clear tasks (keep KB)")
     wiz = sub.add_parser(
         "wizard",
@@ -512,6 +531,7 @@ def main():
         "memory": cmd_memory,
         "budget": cmd_budget,
         "serve": cmd_serve,
+        "tui": cmd_tui,
         "reset": cmd_reset,
         "replay": cmd_replay,
         "mcp-serve": cmd_mcp_serve,
