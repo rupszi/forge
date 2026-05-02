@@ -101,10 +101,20 @@ async def run_skill(
             duration_seconds=time.time() - start,
         )
 
-    # Determine interpreter — Python scripts get python3; binary scripts
-    # are invoked directly (must be in [exec] capability — caller validated).
+    # Determine interpreter. Python scripts run on the SAME interpreter
+    # that runs the daemon (sys.executable) so they can import
+    # ``forge_plugin_api`` and any other dep installed alongside Forge.
+    # Hardcoding "python3" would break in two common cases:
+    #   1. Daemon installed in a venv but `python3` on PATH points at a
+    #      system interpreter without Forge's deps (httpx etc.).
+    #   2. Multiple Pythons installed (asdf / pyenv / homebrew) where
+    #      `python3` resolves to a different version than the daemon.
+    # Binary scripts are invoked directly (must be in [exec] capability —
+    # caller validated).
+    import sys
+
     if entry_script.endswith(".py"):
-        cmd = ["python3", str(script_path), *args]
+        cmd = [sys.executable, str(script_path), *args]
     else:
         cmd = [str(script_path), *args]
 

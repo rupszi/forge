@@ -4,13 +4,15 @@
 [![Python: 3.10+](https://img.shields.io/badge/python-3.10+-green.svg)](pyproject.toml)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
 [![No telemetry](https://img.shields.io/badge/telemetry-none-success.svg)](docs/DECISIONS.md)
-[![Tests: 644 passing](https://img.shields.io/badge/tests-644%20passing-success.svg)]()
+[![Tests: 894 passing](https://img.shields.io/badge/tests-894%20passing-success.svg)]()
 
-> **Free. MIT. Local-first. No telemetry. No signup. No API key required.**
+> **Forge is the harness that doesn't trust its own work.**
 
-Forge is a multi-agent coding orchestrator that runs inside your existing project folder. It discovers your `.claude/` configuration and MCP servers, then orchestrates parallel coding agents (open-weight via Ollama, or Claude Code) against git-worktree-isolated copies of your repo. Every session feeds a persistent SQLite knowledge base that compounds across projects — Forge gets smarter the more you use it.
+The generator runs on one model. The evaluator runs on a **different model family** — automatically. Each `done_criterion` from the planner gets graded independently with PASS/FAIL + evidence. Local SQLite knowledge base compounds across sessions. **MIT, no telemetry, no signup, runs without an API key.**
 
-Think of it as **"Claude Code with a persistent brain that runs locally on open weights."**
+Multi-agent harnesses are commodity in 2026 — every major coding tool ships some flavor of it. The problem the field hasn't solved is *who grades the work*. Self-evaluation fails on MT-Bench self-bias. Voting among same-family peers fails because correlated training distribution → correlated failure modes (Feb 2026 paper showed up to **37.6% performance loss**). Forge's bet is structural: the agent doing the work never grades the work, and the grader runs on a different model family from the writer. Default Ollama, optional Claude / OpenAI / vLLM.
+
+→ **Read more:** [docs/POSITIONING.md](docs/POSITIONING.md) (one-sentence story + research synthesis) · [docs/COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) (head-to-head with 18+ tools) · [docs/ROADMAP.md](docs/ROADMAP.md) (what's shipped + what's open for contributors)
 
 ---
 
@@ -195,7 +197,12 @@ No agent frameworks. No LangChain. No CrewAI. See [docs/DECISIONS.md ADR-011](do
 
 ## Documentation
 
+**Start here:**
+- **[docs/POSITIONING.md](docs/POSITIONING.md)** — what Forge is, what it isn't, OpenClaw / OpenHands / Cursor / Claude Code comparisons in one read
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** — what's shipped + what's open for contributors (every deferred feature has a contract + entry point + acceptance gates)
 - **[INSTALL.md](INSTALL.md)** — detailed install + troubleshooting
+
+**Deeper dives:**
 - **[docs/CONNECTORS.md](docs/CONNECTORS.md)** — tool integrations (MCP + native plugins)
 - **[docs/SKILLS.md](docs/SKILLS.md)** — skills system + security sandbox
 - **[docs/PLUGIN_DEVELOPMENT.md](docs/PLUGIN_DEVELOPMENT.md)** — building your own connector or skill
@@ -206,18 +213,20 @@ No agent frameworks. No LangChain. No CrewAI. See [docs/DECISIONS.md ADR-011](do
 - [docs/memory-system.md](docs/memory-system.md) — four-tier KB design
 - [docs/harness-design.md](docs/harness-design.md) — planner/generator/evaluator contracts
 - [docs/configuration.md](docs/configuration.md) — env vars, paths
-- [docs/COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) — head-to-head with 18+ competitors (incl. OpenClaw deep-dive)
+- [docs/COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) — full head-to-head with 18+ tools
 - [docs/DECISIONS.md](docs/DECISIONS.md) — locked ADRs
-- [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) — 14-week tracker
+- [docs/DELIVERY_PLAN.md](docs/DELIVERY_PLAN.md) — 16-week build plan to v0.1.0
+- [docs/HANDOVER.md](docs/HANDOVER.md) — live state of the build for fresh contributors
 - [docs/ENGINEERING_STANDARDS.md](docs/ENGINEERING_STANDARDS.md) — pre-push gate, schema parity, async patterns
-- [docs/EXECUTION_PLAN.md](docs/EXECUTION_PLAN.md) — code-review fix tracker
 - [docs/research/notes/](docs/research/notes/) — raw research notes
 
 ## Status
 
-Forge is currently **alpha** — Phase 1 of a 14-week build plan. The 644-test suite is green; engineering perimeter (pre-push gate, CI, lint, types, schema-parity script, redaction at 5 boundaries, EventType enum, atomic budget reservation) is in place. The first launchable release is `v0.1.0` targeting end of Phase 3 (~12 weeks out).
+Forge is currently **alpha**. The 894-test suite is green; lint + format clean. Phase 1 (foundation) and Phase 2 parity 5/10 (hooks / custom-slash / AGENTS.md / output-styles / refusal-templates) and Phase 4 layers 5 + 10 (Unicode sanitizer / WS Origin allow-list) are shipped. The first launchable release is `v0.1.0` targeting end of Phase 8 — gated on the SWE-bench kill criterion.
 
-Hard kill criterion: if Forge can't reach **≥30% on a 50-task SWE-bench Verified subset** using the open-weight stack by Phase 2 Week 8, the open-weight thesis fails and we pivot or shut down. See [docs/DECISIONS.md ADR-015](docs/DECISIONS.md).
+What's shipped vs what's open for contributors lives in [docs/ROADMAP.md](docs/ROADMAP.md). Every deferred feature has a contract, an entry point, and acceptance gates — pick one, open a draft PR.
+
+Hard kill criterion: if Forge can't reach **≥30% on a 50-task SWE-bench Verified subset** using the open-weight stack by Phase 2 Week 8, the open-weight thesis fails and the project pivots or shuts down. See [docs/DECISIONS.md ADR-015](docs/DECISIONS.md).
 
 ## Contributing
 
