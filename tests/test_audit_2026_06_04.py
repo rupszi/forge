@@ -206,3 +206,53 @@ class TestChunkOverlapBudget:
         chunks = chunk_text(text, max_tokens=max_tokens)  # default overlap=100
         assert len(chunks) > 1
         assert all(len(c) <= max_chars for c in chunks)
+
+
+# ---- F7: MLX memoizes loaded weights ----
+
+
+class TestMLXWeightCache:
+    @pytest.mark.asyncio
+    async def test_repeated_calls_load_weights_once(self, monkeypatch):
+        from daemon.executors import mlx
+
+        mlx.clear_cache()
+        loads = {"n": 0}
+
+        def fake_load(repo):
+            loads["n"] += 1
+            return ("llm", "tokenizer")
+
+        def fake_generate(llm, tok, prompt, max_tokens):
+            return "generated"
+
+        monkeypatch.setattr(mlx, "_load_mlx", lambda: (fake_load, fake_generate))
+
+        r1 = await mlx.execute("hi", model="mlx:repo-x")
+        r2 = await mlx.execute("there", model="mlx:repo-x")
+        assert r1.success and r2.success
+        assert loads["n"] == 1  # pre-fix: 2
+        mlx.clear_cache()
+
+    @pytest.mark.asyncio
+    async def test_cache_is_bounded_lru(self, monkeypatch):
+        from daemon.executors import mlx
+
+        mlx.clear_cache()
+        loads = {"n": 0}
+
+        def fake_load(repo):
+            loads["n"] += 1
+            return (f"llm-{repo}", "tok")
+
+        monkeypatch.setattr(mlx, "_load_mlx", lambda: (fake_load, lambda *a, **k: "x"))
+
+        # Cap is 2; loading a 3rd distinct repo evicts the LRU (repo-a).
+        for repo in ("mlx:repo-a", "mlx:repo-b", "mlx:repo-c"):
+            await mlx.execute("p", model=repo)
+        assert len(mlx._model_cache) == mlx._MODEL_CACHE_MAX
+        # repo-a was evicted → re-loading it triggers a fresh load.
+        n_before = loads["n"]
+        await mlx.execute("p", model="mlx:repo-a")
+        assert loads["n"] == n_before + 1
+        mlx.clear_cache()

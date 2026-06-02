@@ -14,10 +14,47 @@ here.
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
+from collections import OrderedDict
 
 from ..config import MAX_TASK_DESCRIPTION_LENGTH, TASK_TIMEOUT_SECONDS
 from ..models import ExecutionResult
+
+# Loaded-weights cache (F7). ``mlx_load(repo)`` re-reads multi-GB weights from
+# disk and rebuilds the graph on every call — seconds of latency per sprint.
+# We memoize ``(llm, tokenizer)`` by repo id in a small bounded LRU, guarded by
+# a lock (loads run in worker threads via ``asyncio.to_thread``). The cap is
+# deliberately tiny: MLX weights are large, so holding more than a couple risks
+# the RAM budget the pool enforces elsewhere.
+_MODEL_CACHE_MAX = 2
+_model_cache: OrderedDict[str, tuple] = OrderedDict()
+_cache_lock = threading.Lock()
+
+
+def clear_cache() -> None:
+    """Drop all cached MLX weights (test hygiene / explicit eviction)."""
+    with _cache_lock:
+        _model_cache.clear()
+
+
+def _get_model(repo: str, loader) -> tuple:
+    """Return cached ``(llm, tokenizer)`` for ``repo``, loading once on miss.
+
+    The load itself happens under the lock so two concurrent first-time
+    requests for the same repo don't both pay the multi-GB load cost.
+    """
+    with _cache_lock:
+        cached = _model_cache.get(repo)
+        if cached is not None:
+            _model_cache.move_to_end(repo)
+            return cached
+        loaded = loader(repo)
+        _model_cache[repo] = loaded
+        _model_cache.move_to_end(repo)
+        while len(_model_cache) > _MODEL_CACHE_MAX:
+            _model_cache.popitem(last=False)
+        return loaded
 
 
 def _sanitize(prompt: str) -> str:
@@ -59,7 +96,7 @@ async def execute(
 
     def _run() -> str:
         mlx_load, mlx_generate = _load_mlx()
-        llm, tokenizer = mlx_load(repo)
+        llm, tokenizer = _get_model(repo, mlx_load)
         return mlx_generate(llm, tokenizer, prompt=clean, max_tokens=max_tokens)
 
     try:
