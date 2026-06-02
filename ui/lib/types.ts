@@ -115,6 +115,8 @@ export interface ContextOptions {
   model_max: number;
   ceiling: number; // RAM-safe ceiling
   setting: number | "auto";
+  kv_cache_type: string; // f16 | q8_0 | q4_0
+  kv_cache_types: string[];
   model?: string;
 }
 

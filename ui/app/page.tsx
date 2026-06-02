@@ -58,6 +58,7 @@ export default function Home() {
     initFolder,
     contextOptions,
     setContextSize,
+    setKvCache,
   } = useForgeSocket();
 
   // Slash palette state — controlled here so the prompt input can trigger it
@@ -92,6 +93,7 @@ export default function Home() {
           onModelChange={setActiveModel}
           contextOptions={contextOptions}
           onContextChange={setContextSize}
+          onKvChange={setKvCache}
           tier={tier}
         />
       </div>

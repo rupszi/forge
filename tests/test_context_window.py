@@ -10,8 +10,49 @@ from daemon import context_window as cw
 @pytest.fixture(autouse=True)
 def _reset_setting():
     cw.set_setting("auto")
+    cw.set_kv_cache_type("f16")
     yield
     cw.set_setting("auto")
+    cw.set_kv_cache_type("f16")
+
+
+class TestKvCacheQuantization:
+    def test_default_is_f16(self):
+        assert cw.get_kv_cache_type() == "f16"
+
+    def test_invalid_type_rejected(self):
+        with pytest.raises(ValueError):
+            cw.set_kv_cache_type("q2_k")
+
+    def test_q8_doubles_ceiling(self):
+        cw.set_kv_cache_type("f16")
+        base = cw.ram_safe_ceiling("llama3.1:8b", ram_budget_gb=36.0)
+        cw.set_kv_cache_type("q8_0")
+        q8 = cw.ram_safe_ceiling("llama3.1:8b", ram_budget_gb=36.0)
+        # ~2× more context (capped at model max if it bumps into it).
+        assert q8 >= base
+
+    def test_q4_quadruples_kv_headroom(self):
+        # On a model whose RAM ceiling is below its trained max, q4 should raise
+        # the ceiling well above f16 (not capped by model max).
+        cw.set_kv_cache_type("f16")
+        base = cw.ram_safe_ceiling("llama-4-scout", ram_budget_gb=36.0)
+        cw.set_kv_cache_type("q4_0")
+        q4 = cw.ram_safe_ceiling("llama-4-scout", ram_budget_gb=36.0)
+        assert q4 > base * 2  # roughly 4× the per-token headroom
+
+    def test_kv_quant_shrinks_estimated_cache(self):
+        cw.set_kv_cache_type("f16")
+        f16 = cw.kv_cache_gb("llama3.1:8b", 32768)
+        cw.set_kv_cache_type("q4_0")
+        q4 = cw.kv_cache_gb("llama3.1:8b", 32768)
+        assert q4 < f16
+        assert abs(q4 * 4 - f16) < 0.01  # q4 ≈ ¼ of f16
+
+    def test_options_include_kv_type(self):
+        opts = cw.options_for("llama3.1:8b", ram_budget_gb=36.0)
+        assert opts["kv_cache_type"] == "f16"
+        assert "q8_0" in opts["kv_cache_types"]
 
 
 class TestModelMax:

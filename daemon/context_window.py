@@ -38,8 +38,41 @@ _OVERHEAD_GB = 2.0  # OS + daemon + activation headroom beyond weights + KV
 # 8B @128K ≈ 0.12 MB/tok × 8 ≈ ~15 GB, which matches observed ballparks.
 _KV_MB_PER_TOKEN_PER_B = 0.015
 
-# Process-global preference: "auto" or an int token count.
+# KV-cache quantization: storing the attention cache at q8/q4 shrinks it, so the
+# same RAM holds 2–4× more context. The cache type is set on the *Ollama server*
+# (OLLAMA_FLASH_ATTENTION=1 + OLLAMA_KV_CACHE_TYPE=...); Forge mirrors the user's
+# choice so the ceiling math + dropdown are honest. Multiplier = effective
+# context gain vs f16.
+_KV_MULTIPLIER = {"f16": 1.0, "q8_0": 2.0, "q4_0": 4.0}
+
+
+def _default_kv_type() -> str:
+    import os
+
+    t = os.environ.get("FORGE_KV_CACHE_TYPE") or os.environ.get("OLLAMA_KV_CACHE_TYPE") or "f16"
+    return t if t in _KV_MULTIPLIER else "f16"
+
+
+# Process-global preferences: context size ("auto" or int) + KV cache type.
 _setting: str | int = "auto"
+_kv_setting: str = _default_kv_type()
+
+
+def get_kv_cache_type() -> str:
+    return _kv_setting
+
+
+def set_kv_cache_type(value: str) -> None:
+    """Set the KV-cache quantization Forge assumes the Ollama server uses."""
+    global _kv_setting
+    if value not in _KV_MULTIPLIER:
+        msg = f"kv cache type must be one of {sorted(_KV_MULTIPLIER)}, got {value!r}"
+        raise ValueError(msg)
+    _kv_setting = value
+
+
+def _kv_multiplier() -> float:
+    return _KV_MULTIPLIER[_kv_setting]
 
 
 def get_setting() -> str | int:
@@ -75,8 +108,10 @@ def _params_billion(model: str) -> float:
 
 
 def kv_cache_gb(model: str, ctx_tokens: int) -> float:
-    """Approximate KV-cache footprint (GB) for ``ctx_tokens`` on ``model``."""
-    return _KV_MB_PER_TOKEN_PER_B * _params_billion(model) * ctx_tokens / 1024
+    """Approximate KV-cache footprint (GB) for ``ctx_tokens`` on ``model``,
+    accounting for the active KV-cache quantization."""
+    raw = _KV_MB_PER_TOKEN_PER_B * _params_billion(model) * ctx_tokens / 1024
+    return raw / _kv_multiplier()
 
 
 def ram_safe_ceiling(model: str, ram_budget_gb: float | None = None) -> int:
@@ -87,7 +122,8 @@ def ram_safe_ceiling(model: str, ram_budget_gb: float | None = None) -> int:
     available = ram - estimate_size_gb(model) - _OVERHEAD_GB
     if available <= 0:
         return 4096
-    per_token_gb = _KV_MB_PER_TOKEN_PER_B * _params_billion(model) / 1024
+    # KV-cache quantization shrinks the per-token cost, so q8/q4 fit more tokens.
+    per_token_gb = _KV_MB_PER_TOKEN_PER_B * _params_billion(model) / 1024 / _kv_multiplier()
     max_tokens = int(available / per_token_gb) if per_token_gb > 0 else _DEFAULT_MODEL_MAX
     return max(4096, min(max_tokens, model_max(model)))
 
@@ -133,4 +169,6 @@ def options_for(model: str, ram_budget_gb: float | None = None) -> dict:
         "model_max": mx,
         "ceiling": ceiling,
         "setting": get_setting(),
+        "kv_cache_type": get_kv_cache_type(),
+        "kv_cache_types": list(_KV_MULTIPLIER.keys()),
     }

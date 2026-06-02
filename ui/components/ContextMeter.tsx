@@ -42,6 +42,7 @@ export type ContextMeterProps = {
   // Context-window dropdown (num_ctx).
   contextOptions?: ContextOptions | null;
   onContextChange?: (value: number | "auto") => void;
+  onKvChange?: (value: string) => void;
   // Tier comes from the daemon (billing.py::detect_tier). When undefined,
   // we fall back to a conservative "free" — the daemon ALWAYS sends one,
   // so undefined means "not connected yet" and we shouldn't guess.
@@ -66,6 +67,7 @@ export function ContextMeter(props: ContextMeterProps) {
     onModelChange,
     contextOptions,
     onContextChange,
+    onKvChange,
     tier = "free",  // Conservative default — daemon ALWAYS sends one; this
                     // is just for the moments before connect lands.
     planUsage,
@@ -89,7 +91,11 @@ export function ContextMeter(props: ContextMeterProps) {
           {formatTokens(contextUsed)} / {formatTokens(contextCap)} ({ctxPct}%)
         </span>
         {onContextChange && (
-          <ContextSizePicker options={contextOptions ?? null} onChange={onContextChange} />
+          <ContextSizePicker
+            options={contextOptions ?? null}
+            onChange={onContextChange}
+            onKvChange={onKvChange}
+          />
         )}
       </div>
 

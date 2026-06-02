@@ -7,6 +7,7 @@ import type { ContextOptions } from "@/lib/types";
 export type ContextSizePickerProps = {
   options: ContextOptions | null;
   onChange: (value: number | "auto") => void;
+  onKvChange?: (value: string) => void;
 };
 
 /**
@@ -14,7 +15,7 @@ export type ContextSizePickerProps = {
  * the RAM-safe ceiling are disabled; each shows its approx KV-cache cost.
  * "Auto" picks the largest preset that safely fits the current model + RAM.
  */
-export function ContextSizePicker({ options, onChange }: ContextSizePickerProps) {
+export function ContextSizePicker({ options, onChange, onKvChange }: ContextSizePickerProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -89,6 +90,36 @@ export function ContextSizePicker({ options, onChange }: ContextSizePickerProps)
               </button>
             );
           })}
+
+          {onKvChange && options.kv_cache_types?.length > 0 && (
+            <>
+              <div className="my-1 border-t border-[#1e1e2e]" />
+              <div className="px-3 py-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] text-gray-500">KV cache</span>
+                  <span className="text-[9px] text-gray-600">q8/q4 → more context</span>
+                </div>
+                <div className="flex gap-1">
+                  {options.kv_cache_types.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => onKvChange(t)}
+                      className={`px-2 py-0.5 rounded text-[10px] border ${
+                        options.kv_cache_type === t
+                          ? "border-purple-600 text-purple-300"
+                          : "border-[#1e1e2e] text-gray-400 hover:bg-[#1a1a24]"
+                      }`}
+                    >
+                      {t === "f16" ? "f16" : t === "q8_0" ? "q8" : "q4"}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-1 text-[9px] text-gray-600">
+                  match your Ollama server (OLLAMA_KV_CACHE_TYPE)
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

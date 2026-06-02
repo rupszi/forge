@@ -260,6 +260,11 @@ export function useForgeSocket() {
     send({ type: "set_context", value, model });
   }, [send, model]);
 
+  const setKvCache = useCallback((value: string) => {
+    // Daemon replies with refreshed context_options (larger ceiling under q8/q4).
+    send({ type: "set_kv_cache", value, model });
+  }, [send, model]);
+
   // Folder/branch picker actions.
   const connectFolder = useCallback((path: string) => {
     send({ type: "branches.list", path });
@@ -318,6 +323,7 @@ export function useForgeSocket() {
     initFolder,
     contextOptions,
     setContextSize,
+    setKvCache,
     tier,
   };
 }

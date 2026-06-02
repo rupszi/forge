@@ -322,6 +322,18 @@ async def _handle_message_inner(
             "resolved": resolved,
         }
 
+    if msg_type == "set_kv_cache":
+        from . import context_window
+
+        try:
+            context_window.set_kv_cache_type(msg.get("value", "f16"))
+        except ValueError as e:
+            return {"type": "error", "error": str(e)}
+        model = msg.get("model") or ""
+        # Return refreshed options so the dropdown unlocks larger windows.
+        opts = context_window.options_for(model) if model else {}
+        return {"type": "context_options", "model": model, **opts}
+
     if msg_type == "attach.path":
         # Attach a file or folder's text content as extra agent context.
         path = msg.get("path", "")
