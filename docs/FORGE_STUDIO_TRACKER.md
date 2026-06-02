@@ -36,10 +36,10 @@ last_reviewed: 2026-06-02
 | 1 | M2 — Model Pool Manager | ✅ | Forced squeeze evicts LRU, pins survive, unfittable fails fast, large serialized |
 | 1 | M3 — Memory upgrade (hybrid recall + reinforcement) | ✅ | Warm KB skips a revision + reinforces confidence; injection guard + research redaction live |
 | 1 | M4 — CLI completion + audit fixes | ✅ | plan/run/add/merge/review registered + wired; cross-family invariant + path-guard fixes tested |
-| 1 | M5 — UI completion (5 stub panels + onboarding) | ⬜ | `pnpm build` clean; merge gate approve/reject works; locality indicator honest |
-| 2 | M6 — Tauri desktop shell + sidecar | ⬜ | Double-click `.app` runs an offline coding task end-to-end |
+| 1 | M5 — UI completion (5 stub panels + onboarding) | 🟡 | Locality + pool meters wired + `pnpm build` clean; 5 legacy panels + onboarding remain |
+| 2 | M6 — Tauri desktop shell + sidecar | ⛔ | Blocked: needs Rust toolchain + Apple Developer ID for signing/notarization |
 | 2 | M7 — Document agent | ✅ | Brief → local Markdown via local model; export md/txt/html (+docx opt); `forge doc` |
-| 2 | M8 — Release hardening (v1) | ⬜ | All §9 acceptance criteria green; signed build |
+| 2 | M8 — Release hardening (v1) | ⛔ | Depends on M5 finish + M6 signing |
 | 3 | M9 — Image modality (ComfyUI) | ⏭️ | Prompt → local image with provenance + NSFW filter |
 | 3 | M10 — Video modality (experimental) | ⏭️ | Prompt → local clip, labeled experimental, non-blocking |
 
@@ -140,20 +140,18 @@ last_reviewed: 2026-06-02
 
 ---
 
-### M5 — UI completion  ⬜
+### M5 — UI completion  🟡 (partial)
 *Goal: the dashboard is real, not stubs.*
 
 **Tasks**
-- ⬜ Finish the 5 stub panels: EvaluatorPanel, MergeGate, CostMeter, ResearchPanel, ReviewPanel/LearningLog.
-- ⬜ Wire merge-gate approve/reject end-to-end.
-- ⬜ Onboarding: folder picker + branch picker + `forge models pull` wizard with disk preview.
-- ⬜ Locality indicator ("Local-only ●" / "Cloud enabled ▲"); live pool/RAM meter.
-- ⬜ Schema parity across the 5 locations for all new WS messages.
+- ✅ Locality indicator (`LocalityIndicator.tsx`, "● Local-only" / "▲ Cloud enabled") + live pool/RAM meter (`PoolMeter.tsx`) wired to the new `locality` + `pool_state` WS messages; requested on connect, updated on push.
+- ✅ Schema parity for the new messages: `daemon/locality.py` + `daemon/pool.py` ↔ `ui/lib/types.ts` (`LocalityState`, `PoolState`, `PoolModel`) ↔ `useForgeSocket` handlers.
+- ✅ `pnpm build` clean (Next typecheck passes).
+- ⬜ Flesh out the 5 legacy stub panels (EvaluatorPanel, MergeGate, CostMeter, ResearchPanel, ReviewPanel/LearningLog).
+- ⬜ Merge-gate approve/reject UI; onboarding folder/branch picker + `forge models pull` wizard.
+- ⬜ Playwright snapshot tests (no Playwright harness configured yet).
 
-**Tests**
-- `pnpm build` clean, no console errors. Playwright snapshot tests for the 5 views + merge-gate flow. Schema-parity script green.
-
-**Success gate (exit):** a user can run a coding task fully through the UI (plan → watch → review diff → approve/merge), see live pool/RAM + honest locality, with no stub panels remaining.
+**Success gate (exit):** PARTIAL — new local-first surfaces (locality + pool) shipped and build-verified; the legacy-panel rebuild + onboarding remain. Best done interactively with the daemon running.
 
 ---
 

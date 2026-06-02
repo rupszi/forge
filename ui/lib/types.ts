@@ -78,6 +78,28 @@ export interface BudgetState {
   exhausted: boolean;
 }
 
+// Local-first locality indicator (daemon is the source of truth; see
+// daemon/locality.py). "local" = zero outbound inference; "cloud" = the user
+// explicitly opted in via FORGE_CLOUD_ENABLED.
+export interface LocalityState {
+  mode: "local" | "cloud";
+  cloud_enabled: boolean;
+}
+
+// Model pool state for the live RAM meter (daemon/pool.py).
+export interface PoolModel {
+  name: string;
+  size_gb: number;
+  pinned: boolean;
+  in_use: number;
+}
+
+export interface PoolState {
+  budget_gb: number;
+  resident_gb: number;
+  models: PoolModel[];
+}
+
 export interface ProjectContext {
   path: string;
   is_git: boolean;

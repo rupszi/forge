@@ -17,6 +17,8 @@ import { AttachMenu } from "@/components/AttachMenu";
 import { SlashCommandPalette, buildDefaultCommands } from "@/components/SlashCommandPalette";
 import { OutputStream } from "@/components/OutputStream";
 import { MetadataBar } from "@/components/MetadataBar";
+import { LocalityIndicator } from "@/components/LocalityIndicator";
+import { PoolMeter } from "@/components/PoolMeter";
 
 export default function Home() {
   const {
@@ -41,6 +43,8 @@ export default function Home() {
     totalTokens,
     diffStats,
     tier,
+    locality,
+    pool,
   } = useForgeSocket();
 
   // Slash palette state — controlled here so the prompt input can trigger it
@@ -62,6 +66,8 @@ export default function Home() {
           <span className="text-xs text-gray-500">
             {connected ? "Connected" : "Disconnected"}
           </span>
+          <LocalityIndicator locality={locality} />
+          <PoolMeter pool={pool} />
         </div>
         <ContextMeter
           contextUsed={contextUsed}

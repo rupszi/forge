@@ -8,6 +8,8 @@ import type {
   KnowledgeItem,
   Session,
   WSMessage,
+  LocalityState,
+  PoolState,
 } from "@/lib/types";
 import type { Mode } from "@/components/ModePicker";
 import type { Verbosity } from "@/components/TranscriptView";
@@ -42,6 +44,11 @@ export function useForgeSocket() {
   const [sessionStartTs, setSessionStartTs] = useState<number>(Date.now());
   const [totalTokens, setTotalTokens] = useState(0);
   const [diffStats, setDiffStats] = useState({ added: 0, removed: 0 });
+  const [locality, setLocality] = useState<LocalityState>({
+    mode: "local",
+    cloud_enabled: false,
+  });
+  const [pool, setPool] = useState<PoolState | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -53,6 +60,10 @@ export function useForgeSocket() {
       setConnected(true);
       setSessionStartTs(Date.now());
       ws.send(JSON.stringify({ type: "init", path: "." }));
+      // Pull the local-first locality + model-pool state up front so the
+      // indicators render immediately (they also arrive as pushes later).
+      ws.send(JSON.stringify({ type: "locality" }));
+      ws.send(JSON.stringify({ type: "pool" }));
     };
 
     ws.onclose = () => setConnected(false);
@@ -103,8 +114,17 @@ export function useForgeSocket() {
           if (ctx.billing_tier) {
             setTier(ctx.billing_tier);
           }
+          if ((ctx as any).locality) {
+            setLocality((ctx as any).locality as LocalityState);
+          }
           break;
         }
+        case "locality":
+          setLocality(msg as unknown as LocalityState);
+          break;
+        case "pool_state":
+          setPool(msg as unknown as PoolState);
+          break;
         case "tier_changed":
           setTier((msg as any).tier as Tier);
           break;
@@ -210,6 +230,8 @@ export function useForgeSocket() {
     durationSec,
     totalTokens,
     diffStats,
+    locality,
+    pool,
     tier,
   };
 }
