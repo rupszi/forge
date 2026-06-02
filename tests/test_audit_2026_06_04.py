@@ -176,3 +176,33 @@ class TestUntrustedContextFencing:
         from daemon.memory import kb_guard
 
         assert "best-effort" in (kb_guard.__doc__ or "").lower()
+
+
+# ---- F6: chunk overlap never exceeds max_chars ----
+
+
+class TestChunkOverlapBudget:
+    def test_overlapped_chunks_stay_within_max_chars(self):
+        from daemon.chunker import chunk_text
+
+        max_tokens, overlap_tokens = 10, 5
+        max_chars = max_tokens * 4  # 40
+        # Many short paragraphs → multiple packed chunks → overlap prepended.
+        text = "\n\n".join(f"para {i} alpha beta gamma delta" for i in range(40))
+        chunks = chunk_text(text, max_tokens=max_tokens, overlap_tokens=overlap_tokens)
+
+        assert len(chunks) > 1  # actually chunked
+        # Pre-fix: overlap prepend pushed chunks to ~max_chars + overlap_chars.
+        assert all(len(c) <= max_chars for c in chunks), (
+            f"max chunk {max(len(c) for c in chunks)} > {max_chars}"
+        )
+
+    def test_large_text_with_default_overlap_within_budget(self):
+        from daemon.chunker import chunk_text
+
+        max_tokens = 200
+        max_chars = max_tokens * 4
+        text = ("word " * 5).join(f"\n\nsection {i}\n" for i in range(500))
+        chunks = chunk_text(text, max_tokens=max_tokens)  # default overlap=100
+        assert len(chunks) > 1
+        assert all(len(c) <= max_chars for c in chunks)

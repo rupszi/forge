@@ -30,25 +30,31 @@ def chunk_text(text: str, max_tokens: int = 2000, overlap_tokens: int = 100) -> 
     if len(text) <= max_chars:
         return [text]
 
-    # Break into boundary-respecting pieces no larger than max_chars.
+    overlap_chars = max(0, overlap_tokens) * _CHARS_PER_TOKEN
+    # When overlap is enabled we prepend up to ``overlap_chars`` (plus a "\n\n"
+    # separator) to each chunk afterwards. Reserve that room in the packing
+    # budget so the final overlapped chunk never exceeds ``max_chars`` (F6).
+    pack_budget = max(1, max_chars - overlap_chars - 2) if overlap_chars > 0 else max_chars
+
+    # Break into boundary-respecting pieces no larger than the packing budget.
     pieces: list[str] = []
     for para in text.split("\n\n"):
-        if len(para) <= max_chars:
+        if len(para) <= pack_budget:
             pieces.append(para)
             continue
         for line in para.split("\n"):
-            if len(line) <= max_chars:
+            if len(line) <= pack_budget:
                 pieces.append(line)
             else:
-                # Token-less blob — hard-split.
-                pieces.extend(line[i : i + max_chars] for i in range(0, len(line), max_chars))
+                # Token-less blob — hard-split at the packing budget.
+                pieces.extend(line[i : i + pack_budget] for i in range(0, len(line), pack_budget))
 
-    # Greedily pack pieces into chunks up to max_chars.
+    # Greedily pack pieces into chunks up to the packing budget.
     chunks: list[str] = []
     cur = ""
     for piece in pieces:
         candidate = f"{cur}\n\n{piece}" if cur else piece
-        if len(candidate) > max_chars and cur:
+        if len(candidate) > pack_budget and cur:
             chunks.append(cur)
             cur = piece
         else:
@@ -56,14 +62,18 @@ def chunk_text(text: str, max_tokens: int = 2000, overlap_tokens: int = 100) -> 
     if cur:
         chunks.append(cur)
 
-    if overlap_tokens <= 0 or len(chunks) <= 1:
+    if overlap_chars <= 0 or len(chunks) <= 1:
         return chunks
 
-    # Prepend the tail of each chunk to the next (char-based overlap).
-    overlap_chars = overlap_tokens * _CHARS_PER_TOKEN
+    # Prepend the tail of each chunk to the next (char-based overlap). With the
+    # reserved budget above, ``overlap + sep + chunk <= max_chars``; the final
+    # clamp is belt-and-suspenders against any rounding.
     overlapped = [chunks[0]]
     for prev, nxt in pairwise(chunks):
-        overlapped.append(prev[-overlap_chars:] + "\n\n" + nxt)
+        merged = prev[-overlap_chars:] + "\n\n" + nxt
+        if len(merged) > max_chars:
+            merged = merged[-max_chars:]
+        overlapped.append(merged)
     return overlapped
 
 
