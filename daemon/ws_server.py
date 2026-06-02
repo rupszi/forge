@@ -300,6 +300,27 @@ async def _handle_message_inner(
 
         return {"type": "models_installed", "models": installed_models()}
 
+    if msg_type == "attach.path":
+        # Attach a file or folder's text content as extra agent context.
+        path = msg.get("path", "")
+        if not _validate_init_path(path):
+            return {"type": "error", "error": "path outside permitted scope"}
+        from .attachments import get_store
+
+        result = get_store().add_path(path)
+        return {"type": "attachments", "items": get_store().list(), **result}
+
+    if msg_type == "attach.list":
+        from .attachments import get_store
+
+        return {"type": "attachments", "items": get_store().list(), "ok": True}
+
+    if msg_type == "attach.clear":
+        from .attachments import get_store
+
+        get_store().clear()
+        return {"type": "attachments", "items": [], "ok": True, "cleared": True}
+
     if msg_type == "branches.list":
         # Folder/branch picker (onboarding). Path is scoped to home/cwd.
         path = msg.get("path", ".")

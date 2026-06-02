@@ -194,11 +194,17 @@ export default function Home() {
               onAction={(a) => {
                 switch (a.type) {
                   case "files":
-                    send({ type: "attach.files", names: a.files.map((f) => f.name) });
+                  case "folder": {
+                    // Browsers can't hand the daemon a server-side path, so we
+                    // ask for one. The daemon reads the file/folder text and
+                    // injects it as extra context on the next plan/run.
+                    const p = window.prompt(
+                      "Path to a file or folder to attach as context:",
+                      folderPath
+                    );
+                    if (p && p.trim()) send({ type: "attach.path", path: p.trim() });
                     break;
-                  case "folder":
-                    send({ type: "attach.folder" });
-                    break;
+                  }
                   case "slash":
                     setSlashOpen(true);
                     setSlashQuery("");

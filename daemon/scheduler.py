@@ -268,6 +268,16 @@ async def execute_sprint(
     # ---- Memory context ----
 
     memory, injected_kb_ids = retriever.get_context_and_ids(sprint.description)
+
+    # Inject any user-attached files as extra context (budget-capped). Folded
+    # into the memory block so the generator's existing context-window
+    # truncation applies uniformly.
+    from .attachments import get_store as _get_attach_store
+
+    _attach_ctx = _get_attach_store().context(budget_tokens=4000)
+    if _attach_ctx:
+        memory = f"{memory}\n\n{_attach_ctx}" if memory else _attach_ctx
+
     sprint_start = time.time()
 
     def _reinforce(completed: bool) -> None:
