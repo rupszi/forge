@@ -294,6 +294,46 @@ async def _handle_message_inner(
         # next plan.
         return {"type": "model_changed", "model": msg.get("model", "")}
 
+    if msg_type == "models.installed":
+        # Populate the header model picker with what Ollama has pulled.
+        from .ollama_models import installed_models
+
+        return {"type": "models_installed", "models": installed_models()}
+
+    if msg_type == "branches.list":
+        # Folder/branch picker (onboarding). Path is scoped to home/cwd.
+        path = msg.get("path", ".")
+        if not _validate_init_path(path):
+            return {"type": "error", "error": "path outside permitted scope"}
+        from . import gitctl
+
+        state = await gitctl.list_branches(path)
+        return {"type": "branches", "path": path, **state}
+
+    if msg_type == "branch.checkout":
+        path = msg.get("path", ".")
+        if not _validate_init_path(path):
+            return {"type": "error", "error": "path outside permitted scope"}
+        from . import gitctl
+
+        result = await gitctl.checkout_branch(
+            path, msg.get("branch", ""), create=bool(msg.get("create"))
+        )
+        if result.get("ok"):
+            state = await gitctl.list_branches(path)
+            broadcast({"type": "branches", "path": path, **state})
+        return {"type": "branch_checkout", "path": path, **result}
+
+    if msg_type == "folder.init":
+        path = msg.get("path", ".")
+        if not _validate_init_path(path):
+            return {"type": "error", "error": "path outside permitted scope"}
+        from . import gitctl
+
+        result = await gitctl.init_repo(path)
+        state = await gitctl.list_branches(path)
+        return {"type": "folder_init", "path": path, **result, "branches_state": state}
+
     if msg_type == "connectors.list":
         from .connectors import ConnectorRegistry
 

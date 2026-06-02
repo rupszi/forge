@@ -24,6 +24,7 @@
  */
 
 import React from "react";
+import { ModelPicker } from "./ModelPicker";
 
 export type Tier = "free" | "metered" | "subscription";
 
@@ -33,6 +34,9 @@ export type ContextMeterProps = {
   costUsd: number;            // accumulated $ spend this session (0 for Ollama)
   budgetUsd: number;          // session $ cap (from BudgetController)
   model: string;              // active model identifier
+  // Installed models + change handler turn the model label into a picker.
+  installedModels?: { name: string; size: string }[];
+  onModelChange?: (model: string) => void;
   // Tier comes from the daemon (billing.py::detect_tier). When undefined,
   // we fall back to a conservative "free" — the daemon ALWAYS sends one,
   // so undefined means "not connected yet" and we shouldn't guess.
@@ -53,6 +57,8 @@ export function ContextMeter(props: ContextMeterProps) {
     costUsd,
     budgetUsd,
     model,
+    installedModels,
+    onModelChange,
     tier = "free",  // Conservative default — daemon ALWAYS sends one; this
                     // is just for the moments before connect lands.
     planUsage,
@@ -122,9 +128,17 @@ export function ContextMeter(props: ContextMeterProps) {
         </div>
       )}
 
-      {/* Model badge at the very right */}
+      {/* Model badge at the very right — clickable picker when wired */}
       <div className="flex items-center gap-2 border-l border-[#1e1e2e] pl-4">
-        <span className="text-gray-300 font-mono text-[11px]">{model}</span>
+        {onModelChange ? (
+          <ModelPicker
+            current={model}
+            models={installedModels ?? []}
+            onChange={onModelChange}
+          />
+        ) : (
+          <span className="text-gray-300 font-mono text-[11px]">{model}</span>
+        )}
         <span className="text-gray-500">·</span>
         <span className="text-gray-400 text-[11px]">
           {tierBadge(tier)}

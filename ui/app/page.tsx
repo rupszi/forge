@@ -19,6 +19,7 @@ import { OutputStream } from "@/components/OutputStream";
 import { MetadataBar } from "@/components/MetadataBar";
 import { LocalityIndicator } from "@/components/LocalityIndicator";
 import { PoolMeter } from "@/components/PoolMeter";
+import { ProjectBar } from "@/components/ProjectBar";
 
 export default function Home() {
   const {
@@ -45,6 +46,15 @@ export default function Home() {
     tier,
     locality,
     pool,
+    installedModels,
+    setActiveModel,
+    folderPath,
+    folderIsGit,
+    branches,
+    currentBranch,
+    connectFolder,
+    selectBranch,
+    initFolder,
   } = useForgeSocket();
 
   // Slash palette state — controlled here so the prompt input can trigger it
@@ -75,9 +85,22 @@ export default function Home() {
           costUsd={budget.spent_usd}
           budgetUsd={budget.budget_usd}
           model={model}
+          installedModels={installedModels}
+          onModelChange={setActiveModel}
           tier={tier}
         />
       </div>
+
+      {/* ── Connect a folder + pick a branch ── */}
+      <ProjectBar
+        folderPath={folderPath}
+        folderIsGit={folderIsGit}
+        branches={branches}
+        currentBranch={currentBranch}
+        onConnect={connectFolder}
+        onSelectBranch={selectBranch}
+        onInit={initFolder}
+      />
 
       {/* ── Stack badges (framework / language / MCP servers / KB count) ── */}
       {context && (

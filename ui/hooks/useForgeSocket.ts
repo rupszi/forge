@@ -35,7 +35,7 @@ export function useForgeSocket() {
   // New state added with the Claude-Code-style UI:
   const [mode, setModeState] = useState<Mode>("auto");
   const [verbosity, setVerbosityState] = useState<Verbosity>("normal");
-  const [model, setModel] = useState<string>("qwen3-coder-next");
+  const [model, setModel] = useState<string>("qwen2.5-coder:7b");
   const [tier, setTier] = useState<Tier>("free");  // daemon-supplied; see daemon/billing.py
   const [contextUsed, setContextUsed] = useState(0);
   const [contextCap, setContextCap] = useState(128_000);
@@ -49,6 +49,11 @@ export function useForgeSocket() {
     cloud_enabled: false,
   });
   const [pool, setPool] = useState<PoolState | null>(null);
+  const [installedModels, setInstalledModels] = useState<{ name: string; size: string }[]>([]);
+  const [folderPath, setFolderPath] = useState<string>(".");
+  const [folderIsGit, setFolderIsGit] = useState<boolean>(true);
+  const [branches, setBranches] = useState<string[]>([]);
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -63,6 +68,8 @@ export function useForgeSocket() {
       // Pull the local-first locality + model-pool state up front so the
       // indicators render immediately (they also arrive as pushes later).
       ws.send(JSON.stringify({ type: "locality" }));
+      ws.send(JSON.stringify({ type: "models.installed" }));
+      ws.send(JSON.stringify({ type: "branches.list", path: "." }));
       ws.send(JSON.stringify({ type: "pool" }));
     };
 
@@ -124,6 +131,19 @@ export function useForgeSocket() {
           break;
         case "pool_state":
           setPool(msg as unknown as PoolState);
+          break;
+        case "models_installed":
+          setInstalledModels(((msg as any).models ?? []) as { name: string; size: string }[]);
+          break;
+        case "branches":
+          setFolderPath(((msg as any).path as string) ?? ".");
+          setFolderIsGit(Boolean((msg as any).is_git));
+          setBranches(((msg as any).branches ?? []) as string[]);
+          setCurrentBranch(((msg as any).current as string) ?? null);
+          break;
+        case "branch_checkout":
+          if ((msg as any).ok) setCurrentBranch(((msg as any).current as string) ?? null);
+          else setErrors((p) => [...p, `branch checkout failed: ${(msg as any).error}`]);
           break;
         case "tier_changed":
           setTier((msg as any).tier as Tier);
@@ -206,6 +226,25 @@ export function useForgeSocket() {
     // verbosity is client-side only; no daemon notification needed
   }, []);
 
+  const setActiveModel = useCallback((m: string) => {
+    setModel(m);
+    send({ type: "set_model", model: m });
+  }, [send]);
+
+  // Folder/branch picker actions.
+  const connectFolder = useCallback((path: string) => {
+    send({ type: "branches.list", path });
+  }, [send]);
+
+  const selectBranch = useCallback((path: string, branch: string, create = false) => {
+    send({ type: "branch.checkout", path, branch, create });
+  }, [send]);
+
+  const initFolder = useCallback((path: string) => {
+    send({ type: "folder.init", path });
+    send({ type: "branches.list", path });
+  }, [send]);
+
   const durationSec = Math.floor((Date.now() - sessionStartTs) / 1000);
 
   return {
@@ -232,6 +271,15 @@ export function useForgeSocket() {
     diffStats,
     locality,
     pool,
+    installedModels,
+    setActiveModel,
+    folderPath,
+    folderIsGit,
+    branches,
+    currentBranch,
+    connectFolder,
+    selectBranch,
+    initFolder,
     tier,
   };
 }
