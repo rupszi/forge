@@ -85,40 +85,41 @@ OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 #
 # All defaults are Apache 2.0 / MIT — no commercial-license traps.
 
-# Planner — small reasoner with native tool-call support. gpt-oss:20b is
-# OpenAI's open-weight release; Apache 2.0; ~14 GB; native function calling
-# via the harmony format. Configurable reasoning effort (low/medium/high).
-LOCAL_PLAN_MODEL = os.environ.get("LOCAL_PLAN_MODEL", "gpt-oss:20b")
+# NOTE ON DEFAULTS: these point at models that exist on the Ollama registry
+# *today* and run well on an Apple Silicon machine with 24–48 GB RAM, so a
+# fresh `forge models pull` and `forge run` work out of the box. Advanced users
+# can point any of these at newer/larger models via the env vars below. (The
+# previous defaults referenced unreleased tags that couldn't be pulled.)
 
-# Cheap-tier generator — fast, MoE for low active-param footprint.
-# Qwen3-Coder-Next is 3B-active / 80B MoE, Apache 2.0, 256K context, native
-# tool-call via Hermes parser. Best price/perf for routine sprints.
-LOCAL_CODE_MODEL = os.environ.get("LOCAL_CODE_MODEL", "qwen3-coder-next")
+# Planner / orchestrator — small, fast, native tool-call. qwen2.5:7b is the
+# resident "brain" that plans and routes; ~4.7 GB at Q4.
+LOCAL_PLAN_MODEL = os.environ.get("LOCAL_PLAN_MODEL", "qwen2.5:7b")
 
-# Medium-tier generator — dense 27B for harder tasks. Qwen3.6-27B (Apr 22 2026)
-# advertises "flagship-level agentic coding"; Apache 2.0; ~16 GB at Q4.
-LOCAL_MID_MODEL = os.environ.get("LOCAL_MID_MODEL", "qwen3.6:27b")
+# Cheap-tier generator — qwen2.5-coder:7b. Fast, strong at routine coding,
+# ~4.7 GB. The default workhorse.
+LOCAL_CODE_MODEL = os.environ.get("LOCAL_CODE_MODEL", "qwen2.5-coder:7b")
 
-# Premium-tier generator — DeepSeek V4-Flash (Apr 23 2026) has the highest
-# open-weight SWE-bench Verified score (~79%); MIT license; 13B active.
-LOCAL_PREMIUM_MODEL = os.environ.get("LOCAL_PREMIUM_MODEL", "deepseek-v4-flash")
+# Medium-tier generator — qwen2.5-coder:14b for harder tasks; ~9 GB at Q4.
+LOCAL_MID_MODEL = os.environ.get("LOCAL_MID_MODEL", "qwen2.5-coder:14b")
 
-# Backup medium-tier — Devstral-Small-2507 is OpenHands-validated at 53.6%
-# SWE-bench Verified; Apache 2.0; useful when Qwen3.6 isn't available locally.
-LOCAL_BACKUP_MID_MODEL = os.environ.get("LOCAL_BACKUP_MID_MODEL", "devstral-small-2507")
+# Premium-tier generator — qwen2.5-coder:32b, the strongest local coder that
+# still fits 48 GB; ~20 GB at Q4. Pull on demand for the hardest sprints.
+LOCAL_PREMIUM_MODEL = os.environ.get("LOCAL_PREMIUM_MODEL", "qwen2.5-coder:32b")
 
-# Reasoner (no tools) — DeepSeek-R1 distill is good for hard reasoning passes
-# (planner with-thinking, hard-debug research) but is documented as "reluctant
-# to call tools." Use for non-tool reasoning steps only.
-LOCAL_REASONER_MODEL = os.environ.get("LOCAL_REASONER_MODEL", "deepseek-r1-distill-qwen-32b")
+# Cross-family evaluator / backup — llama3.1:8b. A DIFFERENT family from the
+# Qwen generators so the evaluator doesn't share their blind spots (ADR-006).
+# Part of the default pull set so the harness can grade offline; ~4.9 GB.
+LOCAL_BACKUP_MID_MODEL = os.environ.get("LOCAL_BACKUP_MID_MODEL", "llama3.1:8b")
 
-# Embeddings (for the optional sqlite-vec episodic recall, ADR-012). Small,
-# fast, Apache 2.0.
+# Reasoner (no tools) — deepseek-r1:8b for hard reasoning passes. Optional;
+# not on the default pull path.
+LOCAL_REASONER_MODEL = os.environ.get("LOCAL_REASONER_MODEL", "deepseek-r1:8b")
+
+# Embeddings (hybrid memory recall + optional sqlite-vec). Small, fast.
 LOCAL_EMBED_MODEL = os.environ.get("LOCAL_EMBED_MODEL", "nomic-embed-text")
 
-# Classifier — uses the same small model as the planner for cost. Could be
-# pointed at a tiny dedicated model in the future.
-LOCAL_CLASSIFY_MODEL = os.environ.get("LOCAL_CLASSIFY_MODEL", "gpt-oss:20b")
+# Classifier — reuses the small planner model for cost.
+LOCAL_CLASSIFY_MODEL = os.environ.get("LOCAL_CLASSIFY_MODEL", "qwen2.5:7b")
 
 # Legacy alias for backwards compatibility with code/tests written before the
 # Phase 1 model bump. Will be deprecated after Phase 1 Week 4 stabilizes.
@@ -254,6 +255,13 @@ MODEL_CONTEXT_LIMITS: dict[str, int] = {
     "qwen3-coder:30b": 256_000,
     "qwen3-coder:480b": 256_000,
     "qwen2.5-coder-32b": 32_000,
+    # Current known-good defaults (Ollama tags)
+    "qwen2.5:7b": 32_000,
+    "qwen2.5-coder:7b": 32_000,
+    "qwen2.5-coder:14b": 32_000,
+    "qwen2.5-coder:32b": 32_000,
+    "llama3.1:8b": 128_000,
+    "deepseek-r1:8b": 64_000,
     # Mistral / Devstral
     "devstral-small-2507": 128_000,
     "devstral-small-2505": 128_000,
@@ -294,4 +302,9 @@ MODEL_COSTS = {
     "deepseek-v4-flash": {"input": 0.0, "output": 0.0},
     "devstral-small-2507": {"input": 0.0, "output": 0.0},
     "gpt-oss:20b": {"input": 0.0, "output": 0.0},
+    "qwen2.5:7b": {"input": 0.0, "output": 0.0},
+    "qwen2.5-coder:7b": {"input": 0.0, "output": 0.0},
+    "qwen2.5-coder:14b": {"input": 0.0, "output": 0.0},
+    "qwen2.5-coder:32b": {"input": 0.0, "output": 0.0},
+    "llama3.1:8b": {"input": 0.0, "output": 0.0},
 }

@@ -2,7 +2,11 @@
 
 import argparse
 import asyncio
+import contextlib
 import os
+import shutil
+import subprocess
+from pathlib import Path
 
 from .budget import BudgetController
 from .config import DB_PATH, FORGE_DIR, WS_PORT
@@ -13,6 +17,47 @@ from .scanner.project import scan_project
 
 def _get_db() -> ForgeDB:
     return ForgeDB(DB_PATH)
+
+
+def _launch_ui(ui_dir: Path | None = None):
+    """Start the Next.js dashboard as a managed subprocess (one-command serve).
+
+    Degrades gracefully — if the ``ui/`` directory, its dependencies, or a
+    package manager are missing, returns ``None`` and the daemon runs alone.
+    Returns the ``Popen`` handle so ``cmd_serve`` can stop it on shutdown.
+    """
+    if ui_dir is None:
+        ui_dir = Path(__file__).resolve().parent.parent / "ui"
+    if not ui_dir.is_dir():
+        print("  UI: ui/ not found — running daemon only.")
+        return None
+    if not (ui_dir / "node_modules").is_dir():
+        print("  UI: dependencies not installed (cd ui && pnpm install) — running daemon only.")
+        return None
+    pm = "pnpm" if shutil.which("pnpm") else ("npm" if shutil.which("npm") else None)
+    if pm is None:
+        print("  UI: no pnpm/npm on PATH — running daemon only.")
+        return None
+    cmd = [pm, "dev"] if pm == "pnpm" else ["npm", "run", "dev"]
+    try:
+        proc = subprocess.Popen(cmd, cwd=str(ui_dir))
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"  UI: failed to start ({e}) — running daemon only.")
+        return None
+    print(f"  UI: starting dashboard with {pm} → http://localhost:3000")
+    return proc
+
+
+def _stop_ui(proc) -> None:
+    """Terminate the UI subprocess cleanly (used on daemon shutdown)."""
+    if proc is None:
+        return
+    with contextlib.suppress(Exception):
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 def _run_async(coro):
@@ -575,7 +620,6 @@ def cmd_serve(args):
     wizard before starting the WS server. Skipped in non-tty mode (CI).
     """
     import signal
-    from pathlib import Path
 
     from .worktree import register_signal_handlers
     from .ws_server import start_server
@@ -590,9 +634,14 @@ def cmd_serve(args):
     db = _get_db()
     budget = BudgetController()
 
+    # Launch the dashboard alongside the daemon so `forge serve` is one command
+    # (unless --no-ui for headless / CI). Stopped in the finally below.
+    ui_proc = None if getattr(args, "no_ui", False) else _launch_ui()
+
     print("\nForge daemon starting...")
     print(f"  WebSocket: ws://127.0.0.1:{WS_PORT}")
-    print("  Dashboard: http://localhost:3000")
+    if ui_proc is not None:
+        print("  Dashboard: http://localhost:3000")
     print("  Press Ctrl+C for graceful shutdown\n")
 
     async def _serve():
@@ -613,7 +662,10 @@ def cmd_serve(args):
         finally:
             db.close()
 
-    _run_async(_serve())
+    try:
+        _run_async(_serve())
+    finally:
+        _stop_ui(ui_proc)
 
 
 def cmd_reset(args):
@@ -925,7 +977,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("status", help="Show status dashboard")
     sub.add_parser("doctor", help="Check dependencies")
     sub.add_parser("budget", help="Show budget")
-    sub.add_parser("serve", help="Start daemon + dashboard")
+    srv = sub.add_parser("serve", help="Start daemon + dashboard (one command)")
+    srv.add_argument("--no-ui", action="store_true", help="Run the daemon only (headless / CI)")
     sub.add_parser(
         "tui",
         help="Launch the Textual terminal UI (Codex/Claude-Code-style; needs forge[tui] extra)",

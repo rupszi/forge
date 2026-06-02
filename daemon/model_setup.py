@@ -14,6 +14,7 @@ import shutil
 from dataclasses import dataclass, field
 
 from .config import (
+    LOCAL_BACKUP_MID_MODEL,
     LOCAL_CODE_MODEL,
     LOCAL_EMBED_MODEL,
     LOCAL_PLAN_MODEL,
@@ -30,13 +31,16 @@ class ModelSpec:
 
 
 # The default local lineup pulled on first run. Sizes are conservative Q4
-# estimates; the orchestrator/planner + a coder + an embedding model are the
-# minimum for an offline coding session. The evaluator reuses one of these
-# families (cross-family pick happens at runtime from what's installed).
+# estimates. This set is a *complete offline harness*: an orchestrator/planner,
+# a coder (generator), a DIFFERENT-family evaluator (so cross-family grading
+# works with no network — ADR-006), and an embedding model for memory recall.
+# Total ~14.6 GB. Larger generators (qwen2.5-coder:14b/32b) are pulled on
+# demand by the classifier/budget, not up front.
 DEFAULT_MODEL_SET: list[ModelSpec] = [
-    ModelSpec(LOCAL_PLAN_MODEL, 14.0),
-    ModelSpec(LOCAL_CODE_MODEL, 9.0),
-    ModelSpec(LOCAL_EMBED_MODEL, 0.3),
+    ModelSpec(LOCAL_PLAN_MODEL, 4.7),  # orchestrator (qwen2.5:7b)
+    ModelSpec(LOCAL_CODE_MODEL, 4.7),  # generator (qwen2.5-coder:7b)
+    ModelSpec(LOCAL_BACKUP_MID_MODEL, 4.9),  # cross-family evaluator (llama3.1:8b)
+    ModelSpec(LOCAL_EMBED_MODEL, 0.3),  # embeddings (nomic-embed-text)
 ]
 
 

@@ -151,20 +151,21 @@ def test_selection_is_deterministic(generator: str):
 # ---- Behavior: candidate ordering ----
 
 
-def test_qwen_generator_prefers_gpt_oss_evaluator():
-    """The candidate list is ordered cheap-and-tested first. For a Qwen
-    generator the first non-Qwen candidate is gpt-oss:20b (the classify
-    model)."""
-    evaluator = pick_evaluator_model("qwen3.6:27b")
-    assert evaluator == LOCAL_CLASSIFY_MODEL  # gpt-oss:20b
-    assert model_family(evaluator) == "openai"
+def test_qwen_generator_gets_cross_family_evaluator():
+    """For a Qwen generator the evaluator must come from a different family.
+    With the current lineup the first non-Qwen candidate is the backup model
+    (llama3.1:8b)."""
+    evaluator = pick_evaluator_model("qwen2.5-coder:7b")
+    assert model_family(evaluator) != "qwen"
+    assert evaluator == LOCAL_BACKUP_MID_MODEL  # llama3.1:8b
 
 
-def test_openai_generator_prefers_devstral_evaluator():
-    """For a gpt-oss / openai generator, the first cross-family candidate
-    is the backup mid-tier (devstral-small-2507)."""
+def test_openai_generator_gets_cross_family_evaluator():
+    """For a gpt-oss / openai generator, the evaluator must not be openai.
+    The first cross-family candidate is the classify model (qwen2.5:7b)."""
     evaluator = pick_evaluator_model("gpt-oss:20b")
-    assert evaluator == LOCAL_BACKUP_MID_MODEL
+    assert model_family(evaluator) != "openai"
+    assert evaluator == LOCAL_CLASSIFY_MODEL  # qwen2.5:7b
 
 
 # ---- Edge cases ----
