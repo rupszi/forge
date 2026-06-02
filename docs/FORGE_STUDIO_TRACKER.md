@@ -25,6 +25,8 @@ last_reviewed: 2026-06-02
 
 **Update protocol:** when you start a task set it 🟡; when the PR is open set it 🔵; mark ✅ **only** when its success gate passes with linked evidence (test name, trace excerpt, or screenshot). Bump `last_reviewed` on every edit. Never mark a milestone ✅ until all its tasks **and** its exit gate are ✅.
 
+**Post-M4 usability pass (2026-06-02):** `forge serve` now launches the daemon **and** the dashboard in one command (`--no-ui` for headless); default model lineup repointed to real pullable Ollama tags (qwen2.5 / llama3.1 / nomic-embed-text) so `forge models pull` + `forge run` work out of the box; **[docs/USER_GUIDE.md](USER_GUIDE.md)** written (install → models → start → connect models → orchestrate agents → documents) and README refreshed. Full suite 1044 passed.
+
 ---
 
 ## Dashboard

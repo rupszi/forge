@@ -4,13 +4,15 @@
 [![Python: 3.10+](https://img.shields.io/badge/python-3.10+-green.svg)](pyproject.toml)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
 [![No telemetry](https://img.shields.io/badge/telemetry-none-success.svg)](docs/DECISIONS.md)
-[![Tests: 894 passing](https://img.shields.io/badge/tests-894%20passing-success.svg)]()
+[![Tests: 1044 passing](https://img.shields.io/badge/tests-1044%20passing-success.svg)]()
 
 > **Forge is the harness that doesn't trust its own work.**
 
 The generator runs on one model. The evaluator runs on a **different model family** — automatically. Each `done_criterion` from the planner gets graded independently with PASS/FAIL + evidence. Local SQLite knowledge base compounds across sessions. **MIT, no telemetry, no signup, runs without an API key.**
 
 Multi-agent harnesses are commodity in 2026 — every major coding tool ships some flavor of it. The problem the field hasn't solved is *who grades the work*. Self-evaluation fails on MT-Bench self-bias. Voting among same-family peers fails because correlated training distribution → correlated failure modes (Feb 2026 paper showed up to **37.6% performance loss**). Forge's bet is structural: the agent doing the work never grades the work, and the grader runs on a different model family from the writer. Default Ollama, optional Claude / OpenAI / vLLM.
+
+→ **New user? Start here:** **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** — install, pull models, start the app, connect models, orchestrate agents, generate documents. Local-first, free by default.
 
 → **Read more:** [docs/POSITIONING.md](docs/POSITIONING.md) (one-sentence story + research synthesis) · [docs/COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) (head-to-head with 18+ tools) · [docs/ROADMAP.md](docs/ROADMAP.md) (what's shipped + what's open for contributors)
 
@@ -38,9 +40,9 @@ See [docs/COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) for the ful
 
 Forge uses three agent roles inspired by [Anthropic's harness design](https://www.anthropic.com/engineering/harness-design-long-running-apps):
 
-- **Planner** — decomposes objectives into sprint-sized tasks with explicit `done_criteria`. Runs on `gpt-oss:20b` via Ollama (free) by default.
-- **Generator** — writes code in an isolated git worktree, one per task. Cheap-tier `qwen3-coder-next`, medium-tier `qwen3.6:27b`, or premium `deepseek-v4-flash` — all open-weight, all Apache 2.0 / MIT.
-- **Evaluator** — reviews the generator's work from outside, **on a different model family** (cross-family enforced automatically). Grades each `done_criterion` independently with PASS/FAIL + evidence. Can fail a sprint and send specific feedback for revision.
+- **Planner / orchestrator** — decomposes objectives into sprint-sized tasks with explicit `done_criteria`. Runs on `qwen2.5:7b` via Ollama (free) by default.
+- **Generator** — writes code in an isolated git worktree, one per task. Cheap-tier `qwen2.5-coder:7b`, medium-tier `qwen2.5-coder:14b`, or premium `qwen2.5-coder:32b` — all open-weight, all pulled by `forge models pull`. Models spawn on demand under a RAM budget and evict when memory is tight.
+- **Evaluator** — reviews the generator's work from outside, **on a different model family** (`llama3.1:8b` by default — cross-family enforced automatically). Grades each `done_criterion` independently with PASS/FAIL + evidence. Can fail a sprint and send specific feedback for revision.
 
 Every session feeds a four-tier persistent memory (SQLite):
 
@@ -95,10 +97,12 @@ forge init                               Scan project, create .forge/, display c
 forge plan "Build auth API with tests"   Decompose into sprints with contracts
 forge run                                Execute all pending sprints
 forge run sprint-a1f3                    Execute a specific sprint
-forge add "Fix login bug" --claude       Add a single task (skip planner)
+forge add "Fix login bug" --model qwen2.5-coder:7b   Add a single task (skip planner)
 forge status                             Show dashboard in terminal
-forge doctor                             Check Claude Code, Ollama, git, MCP
-forge models                             List available Ollama models
+forge doctor                             Check Claude Code, Ollama, git, MCP, models
+forge models                             List the default local lineup + what's pulled
+forge models pull                        Download the default models (disk-guarded)
+forge doc "write a README" --format md   Generate a document locally
 forge merge --approve                    Approve all clean merges
 forge merge --show                       Show pending diffs
 forge budget                             Show spend vs cap
@@ -116,8 +120,10 @@ forge skills install <skill-name>        Install a skill (sandboxed, capability-
 forge llms list                          List configured LLM providers
 forge llms add <provider>                Add a new LLM provider
 forge reset                              Clear tasks (keep knowledge base)
-forge serve                              Start daemon + open browser dashboard
+forge serve                              Start daemon + dashboard (one command)
 ```
+
+→ Full walkthrough with model-connection and agent-orchestration details: **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**.
 
 ## Architecture
 
