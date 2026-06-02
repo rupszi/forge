@@ -300,6 +300,28 @@ async def _handle_message_inner(
 
         return {"type": "models_installed", "models": installed_models()}
 
+    if msg_type == "context.options":
+        # Preset list + RAM-safe ceiling for the context-size dropdown.
+        from . import context_window
+
+        model = msg.get("model") or ""
+        return {"type": "context_options", "model": model, **context_window.options_for(model)}
+
+    if msg_type == "set_context":
+        from . import context_window
+
+        try:
+            context_window.set_setting(msg.get("value", "auto"))
+        except ValueError as e:
+            return {"type": "error", "error": str(e)}
+        model = msg.get("model") or ""
+        resolved = context_window.resolve_num_ctx(model) if model else None
+        return {
+            "type": "context_set",
+            "setting": context_window.get_setting(),
+            "resolved": resolved,
+        }
+
     if msg_type == "attach.path":
         # Attach a file or folder's text content as extra agent context.
         path = msg.get("path", "")

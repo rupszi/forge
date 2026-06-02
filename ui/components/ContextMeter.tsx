@@ -25,6 +25,8 @@
 
 import React from "react";
 import { ModelPicker } from "./ModelPicker";
+import { ContextSizePicker } from "./ContextSizePicker";
+import type { ContextOptions } from "@/lib/types";
 
 export type Tier = "free" | "metered" | "subscription";
 
@@ -37,6 +39,9 @@ export type ContextMeterProps = {
   // Installed models + change handler turn the model label into a picker.
   installedModels?: { name: string; size: string }[];
   onModelChange?: (model: string) => void;
+  // Context-window dropdown (num_ctx).
+  contextOptions?: ContextOptions | null;
+  onContextChange?: (value: number | "auto") => void;
   // Tier comes from the daemon (billing.py::detect_tier). When undefined,
   // we fall back to a conservative "free" — the daemon ALWAYS sends one,
   // so undefined means "not connected yet" and we shouldn't guess.
@@ -59,6 +64,8 @@ export function ContextMeter(props: ContextMeterProps) {
     model,
     installedModels,
     onModelChange,
+    contextOptions,
+    onContextChange,
     tier = "free",  // Conservative default — daemon ALWAYS sends one; this
                     // is just for the moments before connect lands.
     planUsage,
@@ -81,6 +88,9 @@ export function ContextMeter(props: ContextMeterProps) {
         <span className="tabular-nums">
           {formatTokens(contextUsed)} / {formatTokens(contextCap)} ({ctxPct}%)
         </span>
+        {onContextChange && (
+          <ContextSizePicker options={contextOptions ?? null} onChange={onContextChange} />
+        )}
       </div>
 
       {/* Cost meter — only shown for metered tier (paid API) */}

@@ -96,7 +96,8 @@ class TestDispatchCloudGate:
 
         monkeypatch.delenv("FORGE_CLOUD_ENABLED", raising=False)
 
-        async def fake_execute(prompt, model):
+        async def fake_execute(prompt, model=None, **kwargs):
+            # The generator now also passes num_ctx for the ollama path.
             return ExecutionResult(success=True, output="ok")
 
         monkeypatch.setattr(ollama_executor, "execute", fake_execute)

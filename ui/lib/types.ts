@@ -100,6 +100,24 @@ export interface PoolState {
   models: PoolModel[];
 }
 
+// Context-window (num_ctx) sizing for the dropdown (daemon/context_window.py).
+export interface ContextPreset {
+  tokens: number;
+  label: string;
+  fits: boolean; // within the RAM-safe ceiling
+  exceeds_model: boolean; // above the model's trained max
+  kv_gb: number; // approx KV-cache cost
+}
+
+export interface ContextOptions {
+  presets: ContextPreset[];
+  auto: number; // tokens "auto" resolves to
+  model_max: number;
+  ceiling: number; // RAM-safe ceiling
+  setting: number | "auto";
+  model?: string;
+}
+
 export interface ProjectContext {
   path: string;
   is_git: boolean;

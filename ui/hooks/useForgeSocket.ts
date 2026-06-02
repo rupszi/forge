@@ -10,6 +10,7 @@ import type {
   WSMessage,
   LocalityState,
   PoolState,
+  ContextOptions,
 } from "@/lib/types";
 import type { Mode } from "@/components/ModePicker";
 import type { Verbosity } from "@/components/TranscriptView";
@@ -54,6 +55,7 @@ export function useForgeSocket() {
   const [folderIsGit, setFolderIsGit] = useState<boolean>(true);
   const [branches, setBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
+  const [contextOptions, setContextOptions] = useState<ContextOptions | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -70,6 +72,7 @@ export function useForgeSocket() {
       ws.send(JSON.stringify({ type: "locality" }));
       ws.send(JSON.stringify({ type: "models.installed" }));
       ws.send(JSON.stringify({ type: "branches.list", path: "." }));
+      ws.send(JSON.stringify({ type: "context.options", model: "qwen2.5-coder:7b" }));
       ws.send(JSON.stringify({ type: "pool" }));
     };
 
@@ -151,6 +154,19 @@ export function useForgeSocket() {
           if (!(msg as any).ok && !(msg as any).cancelled) {
             setErrors((p) => [...p, `folder picker: ${(msg as any).error}`]);
           }
+          break;
+        case "context_options": {
+          const opts = msg as unknown as ContextOptions;
+          setContextOptions(opts);
+          if (opts.setting === "auto") setContextCap(opts.auto);
+          else if (typeof opts.setting === "number") setContextCap(opts.setting);
+          break;
+        }
+        case "context_set":
+          if (typeof (msg as any).resolved === "number") setContextCap((msg as any).resolved);
+          setContextOptions((prev) =>
+            prev ? { ...prev, setting: (msg as any).setting } : prev
+          );
           break;
         case "tier_changed":
           setTier((msg as any).tier as Tier);
@@ -236,7 +252,13 @@ export function useForgeSocket() {
   const setActiveModel = useCallback((m: string) => {
     setModel(m);
     send({ type: "set_model", model: m });
+    // Context ceiling depends on the model — refresh the dropdown options.
+    send({ type: "context.options", model: m });
   }, [send]);
+
+  const setContextSize = useCallback((value: number | "auto") => {
+    send({ type: "set_context", value, model });
+  }, [send, model]);
 
   // Folder/branch picker actions.
   const connectFolder = useCallback((path: string) => {
@@ -294,6 +316,8 @@ export function useForgeSocket() {
     browseFolder,
     selectBranch,
     initFolder,
+    contextOptions,
+    setContextSize,
     tier,
   };
 }

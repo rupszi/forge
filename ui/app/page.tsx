@@ -56,6 +56,8 @@ export default function Home() {
     browseFolder,
     selectBranch,
     initFolder,
+    contextOptions,
+    setContextSize,
   } = useForgeSocket();
 
   // Slash palette state — controlled here so the prompt input can trigger it
@@ -88,6 +90,8 @@ export default function Home() {
           model={model}
           installedModels={installedModels}
           onModelChange={setActiveModel}
+          contextOptions={contextOptions}
+          onContextChange={setContextSize}
           tier={tier}
         />
       </div>

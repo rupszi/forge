@@ -244,4 +244,15 @@ async def generate(
     # different positional args. Dispatch accordingly.
     if executor is claude_executor:
         return await executor.execute(prompt, worktree_path, sprint.assigned_model)
+    if executor is ollama_executor:
+        # Set the context window (num_ctx) per the user's setting, clamped to
+        # the model's max and a RAM-safe ceiling. Without this, Ollama uses its
+        # small default window regardless of the model's capability.
+        from ..context_window import resolve_num_ctx
+
+        return await executor.execute(
+            prompt,
+            model=sprint.assigned_model,
+            num_ctx=resolve_num_ctx(sprint.assigned_model),
+        )
     return await executor.execute(prompt, model=sprint.assigned_model)
