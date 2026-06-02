@@ -271,6 +271,21 @@ levers:
   sessions don't lose the earlier context. On by default; `FORGE_AUTO_COMPACT=0`
   to disable.
 
+**Context window size** — the top-bar `ctx … ▾` dropdown sets the model's window
+(`num_ctx`): presets **4K → 2M** plus **Auto** (largest that safely fits the model
++ RAM). Presets above the model's trained max or your RAM-safe ceiling are greyed
+out with the reason.
+
+**KV-cache quantization** — at the bottom of that dropdown, **f16 / q8 / q4**.
+Storing the attention cache at q8/q4 holds **2–4× more context** per GB, unlocking
+larger windows. To make it real, start Ollama with
+`OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0` (Forge mirrors the choice so
+the ceiling math is honest).
+
+**`forge digest <file>`** — map-reduce a file larger than the window into a concise
+digest (saved under `.forge/artifacts/`), so a small-window model can still
+process it. The chunker + `file.fetch` also let the agent lazy-load big inputs.
+
 And the simplest lever: **pick a long-context model** from the top-right model
 picker (e.g. a 128K-window model) when a task genuinely needs more room.
 

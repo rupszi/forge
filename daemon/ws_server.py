@@ -136,13 +136,13 @@ def _validate_init_path(path: str) -> bool:
     is rejected even though the bind is loopback — defense in depth against
     a buggy UI walking the filesystem.
     """
-    # Normalize case (os.path.normcase lowercases on case-insensitive
-    # filesystems — macOS HFS+/APFS, Windows — and is a no-op on Linux) so a
-    # path like /Users/Dev/x can't slip past a /users/dev prefix check (audit
-    # fix, 2026-06-02).
-    abs_path = os.path.normcase(os.path.normpath(os.path.abspath(path)))
-    home = os.path.normcase(os.path.abspath(os.path.expanduser("~")))
-    cwd = os.path.normcase(os.path.abspath("."))
+    # Resolve symlinks with realpath BEFORE the containment check — otherwise a
+    # symlink planted inside cwd/home (e.g. innocent.txt -> /etc/passwd) passes
+    # the lexical prefix test and the downstream reader follows it out of scope
+    # (audit fix, 2026-06-03). normcase handles case-insensitive filesystems.
+    abs_path = os.path.normcase(os.path.realpath(path))
+    home = os.path.normcase(os.path.realpath(os.path.expanduser("~")))
+    cwd = os.path.normcase(os.path.realpath("."))
     return (
         abs_path == home
         or abs_path.startswith(home + os.sep)

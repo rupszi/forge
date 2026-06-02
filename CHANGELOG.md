@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Forge Studio local-first pivot + comprehensive audit (2026-06-03)
+
+Local-first / free-by-default app (see `docs/FORGE_STUDIO_BUILD.md`): cloud-opt-in
+gate, model pool, compounding memory, folder/branch + model + context-size pickers,
+native folder dialog, and a full context-extension stack (attachments, memory-tool
+scratchpad, auto-compaction, num_ctx presets + KV-cache quantization, doc-chunker /
+`forge digest`, lazy `file.fetch`). Test count grew to **1155 passing**.
+
+A four-role audit (security / test-quality / code-quality / architecture) is at
+`docs/audits/2026-06-03-forge-studio/`. Two **High** findings were fixed:
+
+#### Security — Fixed
+- **Evaluator no longer runs on cloud `claude -p` by default.** It now routes
+  through the same executor selection + cloud gate as the generator, so the
+  cross-family evaluator runs **locally** (e.g. `llama3.1:8b` on Ollama) and a
+  cloud eval model with cloud disabled raises `CloudDisabledError` (restores the
+  G-LOC-1 zero-egress-by-default guarantee).
+- **Symlink-escape closed** in `_validate_init_path` (now `realpath`s before the
+  containment check) and attachments skip symlinks — a planted
+  `innocent.txt → /etc/passwd` can no longer be read into agent context.
+
+#### Docs — Reconciled
+- README de-numbered the test badge, corrected model names (`qwen2.5*`), removed
+  unregistered `forge research` / `forge llms` verbs, added `forge digest`.
+- USER_GUIDE §7.5 now documents num_ctx presets, KV-cache quantization, and `forge digest`.
+
 ### Install script + plugin ecosystem + security audit (2026-05-01)
 
 Major scope expansion in service of v0.1.0 release readiness. Test count

@@ -42,9 +42,41 @@ import logging
 import re
 
 from ..config import MAX_DIFF_LENGTH
-from ..executors import claude_code as claude_executor
 from ..models import CriterionResult, EvaluatorResult, ProjectContext, SprintContract
 from .classifier import pick_evaluator_model
+
+
+async def _dispatch_eval(prompt: str, eval_model: str):
+    """Run the evaluation prompt on the chosen model via the correct executor.
+
+    Mirrors the generator's routing + local-first cloud gate (audit fix): the
+    evaluator must run *locally by default* on the cross-family model (e.g.
+    llama3.1:8b via Ollama), not unconditionally on the cloud ``claude -p``.
+    A cloud evaluator model with cloud disabled raises ``CloudDisabledError``
+    rather than dialing out (G-LOC-1/2).
+    """
+    from .. import routing
+    from ..config import cloud_enabled
+    from ..executors import (
+        claude_code as cc,
+        mlx as mx,
+        ollama as oll,
+        openai_compatible as oc,
+    )
+
+    executor_str = routing.select_executor(eval_model)
+    if routing.is_cloud_executor(executor_str) and not cloud_enabled():
+        msg = (
+            f"evaluator model {eval_model!r} routes to the cloud executor "
+            f"{executor_str!r}, but FORGE_CLOUD_ENABLED is off. Pick a local "
+            "evaluator model (the default is local) or enable cloud."
+        )
+        raise routing.CloudDisabledError(msg)
+    if executor_str == "claude_code":
+        return await cc.execute(prompt, None, eval_model)
+    module = {"ollama": oll, "openai_compatible": oc, "mlx": mx}[executor_str]
+    return await module.execute(prompt, model=eval_model)
+
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +342,7 @@ async def evaluate(
             f"evaluator={eval_model} ({eval_fam}). See ADR-006."
         )
 
-    result = await claude_executor.execute(prompt, model=eval_model)
+    result = await _dispatch_eval(prompt, eval_model)
 
     if not result.success:
         logger.error("Evaluator execution failed: %s", result.error)

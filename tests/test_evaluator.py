@@ -205,13 +205,13 @@ def test_evaluate_uses_cross_family_when_eval_model_omitted(monkeypatch):
 
     captured = {}
 
-    async def fake_execute(prompt, model, **kwargs):
-        captured["model"] = model
+    async def fake_dispatch(prompt, eval_model):
+        captured["model"] = eval_model
         from daemon.models import ExecutionResult
 
         return ExecutionResult(success=True, output="- PASS: Done — ok\nAPPROVED")
 
-    monkeypatch.setattr(evaluator_module.claude_executor, "execute", fake_execute)
+    monkeypatch.setattr(evaluator_module, "_dispatch_eval", fake_dispatch)
 
     sprint = SprintContract(
         description="Build login",
@@ -237,13 +237,13 @@ def test_evaluate_respects_explicit_eval_model_override(monkeypatch):
 
     captured = {}
 
-    async def fake_execute(prompt, model, **kwargs):
-        captured["model"] = model
+    async def fake_dispatch(prompt, eval_model):
+        captured["model"] = eval_model
         from daemon.models import ExecutionResult
 
         return ExecutionResult(success=True, output="- PASS: Done — ok\nAPPROVED")
 
-    monkeypatch.setattr(evaluator_module.claude_executor, "execute", fake_execute)
+    monkeypatch.setattr(evaluator_module, "_dispatch_eval", fake_dispatch)
 
     sprint = SprintContract(
         description="t", done_criteria=["Done"], assigned_model="qwen3-coder-next"

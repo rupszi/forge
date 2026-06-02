@@ -43,11 +43,13 @@ class AttachmentStore:
         """Attach a file, or every text file under a folder. Returns a summary."""
         p = Path(path)
         if p.is_dir():
-            files = [f for f in sorted(p.rglob("*")) if f.is_file()]
-        elif p.is_file():
+            # Skip symlinks — a link inside the attached folder could point
+            # outside the validated scope (audit fix, 2026-06-03).
+            files = [f for f in sorted(p.rglob("*")) if f.is_file() and not f.is_symlink()]
+        elif p.is_file() and not p.is_symlink():
             files = [p]
         else:
-            return {"ok": False, "error": f"not found: {path}"}
+            return {"ok": False, "error": f"not found or symlink: {path}"}
 
         added: list[dict] = []
         for f in files[:MAX_FILES]:

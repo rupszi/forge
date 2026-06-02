@@ -4,7 +4,7 @@
 [![Python: 3.10+](https://img.shields.io/badge/python-3.10+-green.svg)](pyproject.toml)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
 [![No telemetry](https://img.shields.io/badge/telemetry-none-success.svg)](docs/DECISIONS.md)
-[![Tests: 1044 passing](https://img.shields.io/badge/tests-1044%20passing-success.svg)]()
+[![Tests: passing](https://img.shields.io/badge/tests-passing-success.svg)]()
 
 > **Forge is the harness that doesn't trust its own work.**
 
@@ -103,6 +103,7 @@ forge doctor                             Check Claude Code, Ollama, git, MCP, mo
 forge models                             List the default local lineup + what's pulled
 forge models pull                        Download the default models (disk-guarded)
 forge doc "write a README" --format md   Generate a document locally
+forge digest bigfile.md                  Map-reduce a large file into a digest
 forge merge --approve                    Approve all clean merges
 forge merge --show                       Show pending diffs
 forge budget                             Show spend vs cap
@@ -110,15 +111,12 @@ forge memory                             Show knowledge base summary
 forge memory search "supabase"           Search the knowledge base
 forge memory add "gotcha" "supabase" "RLS requires service_role for testing"
 forge memory import                      Import from Claude Code auto-memory
-forge research "next.js middleware auth" Manual web research
 forge review sprint-a1f3                 Run multi-perspective review
 forge replay session-abc123              Replay a session from its trace.jsonl
 forge connectors list                    List configured tool connectors
 forge connectors add github              Add a new connector via MCP or native plugin
 forge skills list                        List installed skills
 forge skills install <skill-name>        Install a skill (sandboxed, capability-scoped)
-forge llms list                          List configured LLM providers
-forge llms add <provider>                Add a new LLM provider
 forge reset                              Clear tasks (keep knowledge base)
 forge serve                              Start daemon + dashboard (one command)
 ```
@@ -141,7 +139,7 @@ Forge Daemon (Python, asyncio)
     │     ├── Procedural memory    routing patterns; learns over time
     │     └── Research cache       web search results with TTL
     │
-    ├── Planner Agent      decomposes objectives into sprints (gpt-oss:20b default)
+    ├── Planner Agent      decomposes objectives into sprints (qwen2.5:7b default)
     ├── Generator Agents   write code in git worktrees (Qwen3-Coder-Next / Devstral / Claude)
     ├── Evaluator Agent    reviews work externally on a DIFFERENT model family
     ├── Reviewer           multi-perspective review panel (security/perf/correctness)
@@ -228,7 +226,7 @@ No agent frameworks. No LangChain. No CrewAI. See [docs/DECISIONS.md ADR-011](do
 
 ## Status
 
-Forge is currently **alpha**. The 894-test suite is green; lint + format clean. Phase 1 (foundation) and Phase 2 parity 5/10 (hooks / custom-slash / AGENTS.md / output-styles / refusal-templates) and Phase 4 layers 5 + 10 (Unicode sanitizer / WS Origin allow-list) are shipped. The first launchable release is `v0.1.0` targeting end of Phase 8 — gated on the SWE-bench kill criterion.
+Forge is currently **alpha**. The test suite is green (1100+ tests); lint + format clean. Phase 1 (foundation) and Phase 2 parity 5/10 (hooks / custom-slash / AGENTS.md / output-styles / refusal-templates) and Phase 4 layers 5 + 10 (Unicode sanitizer / WS Origin allow-list) are shipped. The first launchable release is `v0.1.0` targeting end of Phase 8 — gated on the SWE-bench kill criterion.
 
 What's shipped vs what's open for contributors lives in [docs/ROADMAP.md](docs/ROADMAP.md). Every deferred feature has a contract, an entry point, and acceptance gates — pick one, open a draft PR.
 
