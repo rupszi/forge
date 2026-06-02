@@ -363,6 +363,19 @@ async def _handle_message_inner(
         state = await gitctl.list_branches(path)
         return {"type": "folder_init", "path": path, **result, "branches_state": state}
 
+    if msg_type == "folder.pick":
+        # Pop the OS-native folder chooser on the daemon's machine. The chosen
+        # path is a deliberate user action, so we trust it (no home/cwd scope
+        # check) and return its branch state via the standard ``branches`` msg
+        # so the UI updates the path field + branch list in one shot.
+        from . import folder_dialog, gitctl
+
+        picked = await folder_dialog.pick_folder()
+        if not picked.get("ok"):
+            return {"type": "folder_picked", **picked}
+        state = await gitctl.list_branches(picked["path"])
+        return {"type": "branches", "path": picked["path"], **state}
+
     if msg_type == "connectors.list":
         from .connectors import ConnectorRegistry
 

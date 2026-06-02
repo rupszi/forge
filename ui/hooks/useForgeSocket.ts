@@ -145,6 +145,13 @@ export function useForgeSocket() {
           if ((msg as any).ok) setCurrentBranch(((msg as any).current as string) ?? null);
           else setErrors((p) => [...p, `branch checkout failed: ${(msg as any).error}`]);
           break;
+        case "folder_picked":
+          // Only fires on cancel/error (a successful pick returns a `branches`
+          // message which the case above handles).
+          if (!(msg as any).ok && !(msg as any).cancelled) {
+            setErrors((p) => [...p, `folder picker: ${(msg as any).error}`]);
+          }
+          break;
         case "tier_changed":
           setTier((msg as any).tier as Tier);
           break;
@@ -236,6 +243,12 @@ export function useForgeSocket() {
     send({ type: "branches.list", path });
   }, [send]);
 
+  const browseFolder = useCallback(() => {
+    // Daemon pops the OS-native folder dialog and replies with a `branches`
+    // message for the chosen path.
+    send({ type: "folder.pick" });
+  }, [send]);
+
   const selectBranch = useCallback((path: string, branch: string, create = false) => {
     send({ type: "branch.checkout", path, branch, create });
   }, [send]);
@@ -278,6 +291,7 @@ export function useForgeSocket() {
     branches,
     currentBranch,
     connectFolder,
+    browseFolder,
     selectBranch,
     initFolder,
     tier,

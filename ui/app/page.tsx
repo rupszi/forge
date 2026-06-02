@@ -53,6 +53,7 @@ export default function Home() {
     branches,
     currentBranch,
     connectFolder,
+    browseFolder,
     selectBranch,
     initFolder,
   } = useForgeSocket();
@@ -98,6 +99,7 @@ export default function Home() {
         branches={branches}
         currentBranch={currentBranch}
         onConnect={connectFolder}
+        onBrowse={browseFolder}
         onSelectBranch={selectBranch}
         onInit={initFolder}
       />

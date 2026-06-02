@@ -8,19 +8,28 @@ export type ProjectBarProps = {
   branches: string[];
   currentBranch: string | null;
   onConnect: (path: string) => void;
+  onBrowse: () => void;
   onSelectBranch: (path: string, branch: string, create?: boolean) => void;
   onInit: (path: string) => void;
 };
 
 /**
  * Connect a folder (empty or existing), see its branches, and pick which one to
- * work on. Browsers can't open a native folder picker that yields a server
- * path, so you type/paste the path and the daemon scans it (scoped to your home
- * / cwd). Empty or non-git folders get an "Initialize git" action.
+ * work on. "Browse…" pops the OS-native folder dialog (the daemon opens Finder
+ * / zenity on your machine and returns the path). You can also type/paste a
+ * path. Empty or non-git folders get an "Initialize git" action.
  */
 export function ProjectBar(props: ProjectBarProps) {
-  const { folderPath, folderIsGit, branches, currentBranch, onConnect, onSelectBranch, onInit } =
-    props;
+  const {
+    folderPath,
+    folderIsGit,
+    branches,
+    currentBranch,
+    onConnect,
+    onBrowse,
+    onSelectBranch,
+    onInit,
+  } = props;
   const [path, setPath] = useState(folderPath);
   const [newBranch, setNewBranch] = useState("");
 
@@ -38,6 +47,13 @@ export function ProjectBar(props: ProjectBarProps) {
           placeholder="/path/to/your/project (empty or existing)"
           className="flex-1 px-2 py-1 rounded bg-[#12121a] border border-[#1e1e2e] text-gray-200 text-xs font-mono focus:outline-none focus:border-purple-600"
         />
+        <button
+          onClick={onBrowse}
+          title="Open the native folder picker"
+          className="px-3 py-1 text-xs rounded bg-[#1a1a24] text-gray-200 hover:bg-[#22222e] border border-[#1e1e2e]"
+        >
+          Browse…
+        </button>
         <button
           onClick={() => onConnect(path)}
           className="px-3 py-1 text-xs rounded bg-purple-600 text-white hover:bg-purple-500"
