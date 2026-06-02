@@ -60,6 +60,36 @@ def _stop_ui(proc) -> None:
             proc.kill()
 
 
+def _port_in_use(host: str, port: int) -> bool:
+    """True if ``host:port`` can't be bound (something is already listening)."""
+    import socket
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind((host, port))
+        return False
+    except OSError:
+        return True
+    finally:
+        s.close()
+
+
+def _pid_on_port(port: int) -> int | None:
+    """PID of the process listening on ``port`` (via lsof), or None."""
+    try:
+        out = subprocess.run(
+            ["lsof", f"-tiTCP:{port}", "-sTCP:LISTEN"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    pids = [int(x) for x in out.stdout.split() if x.strip().isdigit()]
+    return pids[0] if pids else None
+
+
 def _run_async(coro):
     """Run an async function from sync context."""
     loop = asyncio.new_event_loop()
@@ -620,9 +650,32 @@ def cmd_serve(args):
     wizard before starting the WS server. Skipped in non-tty mode (CI).
     """
     import signal
+    import time
 
+    from .config import WS_HOST
     from .worktree import register_signal_handlers
     from .ws_server import start_server
+
+    # Stale-daemon guard: a previous `forge serve` that didn't shut down cleanly
+    # leaves port 9111 bound. Detect it and either reclaim (--force) or print a
+    # clean, actionable message — never a raw bind traceback.
+    if _port_in_use(WS_HOST, WS_PORT):
+        pid = _pid_on_port(WS_PORT)
+        if getattr(args, "force", False) and pid:
+            print(f"Reclaiming port {WS_PORT} from pid {pid} (--force)…")
+            with contextlib.suppress(OSError):
+                os.kill(pid, signal.SIGTERM)
+                time.sleep(1.0)
+                if _port_in_use(WS_HOST, WS_PORT):
+                    os.kill(pid, signal.SIGKILL)
+                    time.sleep(0.5)
+        else:
+            print(f"\n✗ Port {WS_PORT} is already in use" + (f" (pid {pid})" if pid else "") + ".")
+            print("  Another `forge serve` is probably still running.")
+            if pid:
+                print(f"  Stop it:      kill {pid}")
+            print("  Or reclaim it: forge serve --force\n")
+            return 1
 
     # First-run wizard hook (auto-trigger). The wizard itself is a no-op
     # when stdin isn't a TTY, so this is safe under nohup / docker -d.
@@ -979,6 +1032,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("budget", help="Show budget")
     srv = sub.add_parser("serve", help="Start daemon + dashboard (one command)")
     srv.add_argument("--no-ui", action="store_true", help="Run the daemon only (headless / CI)")
+    srv.add_argument(
+        "--force",
+        action="store_true",
+        help="Reclaim the port if a stale daemon is still bound to it",
+    )
     sub.add_parser(
         "tui",
         help="Launch the Textual terminal UI (Codex/Claude-Code-style; needs forge[tui] extra)",
