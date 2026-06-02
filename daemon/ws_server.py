@@ -222,6 +222,11 @@ async def _handle_message_inner(
     if msg_type == "locality":
         return locality_state()
 
+    if msg_type == "pool":
+        from .pool import active_pool_state
+
+        return active_pool_state()
+
     if msg_type == "plan":
         objective = msg.get("objective", "")
         if not objective:

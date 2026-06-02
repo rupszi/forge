@@ -6,6 +6,8 @@ without touching the disk or Ollama.
 
 from __future__ import annotations
 
+import pytest
+
 from daemon import model_setup
 
 
@@ -60,3 +62,21 @@ class TestFreeDiskGb:
     def test_free_disk_is_positive(self, tmp_path):
         free = model_setup.free_disk_gb(str(tmp_path))
         assert free > 0
+
+
+class TestEstimateSizeGb:
+    def test_known_models_use_table(self):
+        # The default lineup carries explicit sizes.
+        for m in model_setup.DEFAULT_MODEL_SET:
+            assert model_setup.estimate_size_gb(m.name) == m.size_gb
+
+    def test_embedding_models_are_small(self):
+        assert model_setup.estimate_size_gb("some-embed-model") == 0.3
+
+    def test_param_count_parsed(self):
+        # 27b at ~0.6 GB/B ≈ 16.2 GB
+        assert model_setup.estimate_size_gb("qwen3.6:27b") == pytest.approx(16.2)
+        assert model_setup.estimate_size_gb("foo-7b") == pytest.approx(4.2)
+
+    def test_unknown_falls_back_to_default(self):
+        assert model_setup.estimate_size_gb("mystery-model") == 8.0

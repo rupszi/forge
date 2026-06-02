@@ -33,7 +33,7 @@ last_reviewed: 2026-06-02
 |---|---|---|---|
 | 0 | M0 — Foundation & guardrails harness | ✅ | Offline egress test + config-budget tests pass (38 tests) |
 | 1 | M1 — Executor pivot (cloud → local default) | ✅ | Cloud gated behind opt-in; Ollama path egress-proven local; 953 tests green |
-| 1 | M2 — Model Pool Manager | ⬜ | Forced RAM squeeze evicts LRU, never OOMs, orchestrator pinned |
+| 1 | M2 — Model Pool Manager | ✅ | Forced squeeze evicts LRU, pins survive, unfittable fails fast, large serialized |
 | 1 | M3 — Memory upgrade (hybrid recall + reinforcement) | ⬜ | Repeat task skips a revision via cached KB/routing |
 | 1 | M4 — CLI completion + audit fixes | ⬜ | `plan/run/add/merge/review` work; cross-family enforced at runtime |
 | 1 | M5 — UI completion (5 stub panels + onboarding) | ⬜ | `pnpm build` clean; merge gate approve/reject works; locality indicator honest |
@@ -87,20 +87,22 @@ last_reviewed: 2026-06-02
 
 ---
 
-### M2 — Model Pool Manager (`daemon/pool.py`)  ⬜
+### M2 — Model Pool Manager (`daemon/pool.py`)  ✅
 *Goal: spawn agent models on demand, evict under a RAM budget, never OOM.*
 
 **Tasks**
-- ⬜ `pool.py`: track resident models + footprints; `acquire(model)` / `release()`; LRU eviction before load; pin orchestrator + embeddings.
-- ⬜ Serialize large+large so they never co-resist beyond budget.
-- ⬜ Wire scheduler generate/evaluate to acquire handles via the pool.
-- ⬜ Extend `budget.py` to a 2-D budget (cost + RAM residency).
-- ⬜ Emit `pool.state` WS event; log load/evict to trace JSONL.
+- ✅ `pool.py` — `ModelPool` with `acquire`/`release`/`lease`/`pin`; LRU eviction *before* load (no transient overrun); orchestrator + embeddings pinned; `PoolCapacityError` for unfittable; large+large *serialized* via an `asyncio.Condition` (in-use models never evicted, waiters wake on release).
+- ✅ Scheduler wiring: `_generate_with_pool` leases the generator model; `execute_sprint`/`_run_one_attempt` take an optional `pool`; `execute_session` builds one pool per session (loop-bound) and pins `LOCAL_PLAN_MODEL` + `LOCAL_EMBED_MODEL`.
+- ✅ `model_setup.estimate_size_gb()` (table → embed → param-count → default) sizes leases.
+- ✅ `pool_state` pushed via `on_change=_broadcast`; pull path via `pool` WS handler + `active_pool_state()`.
+- ⬜ 2-D budget merge into `budget.py` — deferred; the pool owns RAM, `budget.py` owns $; kept separate intentionally (simpler, both enforced).
 
 **Tests**
-- `test_pool_evicts_lru`, `test_pool_never_evicts_orchestrator`, `test_pool_budget_enforced`, `test_pool_eviction_before_load`, `test_pool_graceful_when_unfittable` (clear error, no hang — G-RAM-3).
+- `test_pool.py` (14): residency/reuse, LRU eviction, budget-never-exceeded, eviction-before-load, pin (ctor + runtime), unfittable raises fast (no hang), large-model serialization, state payload + on_change callback.
+- `test_scheduler_pool.py` (3): generator model resident during generation, pool emits state, no-pool back-comp.
+- `test_model_setup.py` estimator tests (4).
 
-**Success gate (exit):** under a forced budget squeeze, the pool evicts in LRU order, keeps the orchestrator pinned, never exceeds the budget, and fails unfittable loads with an actionable error. UI shows live pool state.
+**Success gate (exit):** ✅ forced squeeze evicts LRU, pins survive, `resident_gb` never exceeds budget on acquire, unfittable fails fast with an actionable message, competing large models serialize. UI can pull (`pool`) and receives pushes (`pool_state`). Full suite 974 passed / 1 skipped.
 
 ---
 

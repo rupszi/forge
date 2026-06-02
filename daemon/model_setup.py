@@ -9,6 +9,7 @@ testable without touching the disk or Ollama; the CLI layer does the actual
 
 from __future__ import annotations
 
+import re
 import shutil
 from dataclasses import dataclass, field
 
@@ -52,6 +53,31 @@ class PullPlan:
 def free_disk_gb(path: str = ".") -> float:
     """Free space (GB) on the volume containing ``path``."""
     return shutil.disk_usage(path).free / (1024**3)
+
+
+# Explicit footprints for models whose name doesn't carry a parameter count.
+_KNOWN_SIZES_GB: dict[str, float] = {m.name: m.size_gb for m in DEFAULT_MODEL_SET}
+_PARAM_GB_FACTOR = 0.6  # ~Q4 bytes-per-param → GB per billion params
+_DEFAULT_MODEL_GB = 8.0
+_param_re = re.compile(r"(\d+(?:\.\d+)?)\s*b\b", re.IGNORECASE)
+
+
+def estimate_size_gb(model: str) -> float:
+    """Best-effort RAM/disk footprint (GB) for a model, for the pool budget.
+
+    Order: explicit known size → embedding heuristic → parameter-count parse
+    (``...27b`` → ~16 GB at Q4) → conservative default. The pool accepts an
+    explicit ``size_gb`` override, so this is only the fallback estimate.
+    """
+    if model in _KNOWN_SIZES_GB:
+        return _KNOWN_SIZES_GB[model]
+    name = model.lower()
+    if "embed" in name:
+        return 0.3
+    m = _param_re.search(name)
+    if m:
+        return round(float(m.group(1)) * _PARAM_GB_FACTOR, 2)
+    return _DEFAULT_MODEL_GB
 
 
 def plan_pull(

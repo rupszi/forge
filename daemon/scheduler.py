@@ -47,6 +47,7 @@ from .memory.episodic import EpisodicStore
 from .memory.retriever import Retriever
 from .mode import ModeState
 from .models import EvaluatorResult, ExecutionResult, ProjectContext, Session, SprintContract
+from .pool import ModelPool, set_active_pool
 from .scanner.repomap import build_repomap
 
 # The plugin dispatcher is intentionally re-exported here so callers in the
@@ -122,6 +123,36 @@ def _writeback_procedural(
         silent_catch(__name__, e)
 
 
+async def _generate_with_pool(
+    sprint: SprintContract,
+    memory: str,
+    wt_path: str,
+    repomap: str,
+    revision_feedback: str,
+    mode: str,
+    pool: ModelPool | None,
+) -> ExecutionResult:
+    """Run the generator, optionally holding a model-pool lease for its model."""
+
+    async def _call() -> ExecutionResult:
+        return await generator.generate(
+            sprint,
+            memory_context=memory,
+            worktree_path=wt_path,
+            repomap=repomap,
+            revision_feedback=revision_feedback,
+            mode=mode,
+        )
+
+    if pool is None:
+        return await _call()
+
+    from .model_setup import estimate_size_gb
+
+    async with pool.lease(sprint.assigned_model, estimate_size_gb(sprint.assigned_model)):
+        return await _call()
+
+
 async def _run_one_attempt(
     sprint: SprintContract,
     ctx: ProjectContext,
@@ -131,20 +162,20 @@ async def _run_one_attempt(
     revision_feedback: str = "",
     *,
     mode: str = "auto",
+    pool: ModelPool | None = None,
 ) -> tuple[ExecutionResult, EvaluatorResult]:
     """Run one generate→evaluate cycle.
 
     Pulled out as a standalone helper so both the normal sprint loop and the
     Self-Consistency layer can call it. Returns the pair so the caller can
     decide what to do (revise, accept, escalate to recovery).
+
+    When a ``pool`` is supplied (M2), the generator model is acquired through
+    it so concurrent sprints respect the local RAM budget — large models are
+    serialized and LRU-evicted rather than overcommitting memory.
     """
-    gen_result = await generator.generate(
-        sprint,
-        memory_context=memory,
-        worktree_path=wt_path,
-        repomap=repomap,
-        revision_feedback=revision_feedback,
-        mode=mode,
+    gen_result = await _generate_with_pool(
+        sprint, memory, wt_path, repomap, revision_feedback, mode, pool
     )
 
     if not gen_result.success:
@@ -172,6 +203,7 @@ async def execute_sprint(
     *,
     repomap: str = "",
     mode_state: ModeState | None = None,
+    pool: ModelPool | None = None,
 ) -> SprintContract:
     """Execute one sprint: generate → evaluate → revise (≤MAX_REVISIONS) → done.
 
@@ -249,7 +281,9 @@ async def execute_sprint(
         _emit(EventType.RECOVERY_CONSISTENCY_START.value, reason="critical sprint")
 
         async def _attempt(_sprint, _i):
-            return await _run_one_attempt(_sprint, ctx, wt_path, memory, repomap, mode=current_mode)
+            return await _run_one_attempt(
+                _sprint, ctx, wt_path, memory, repomap, mode=current_mode, pool=pool
+            )
 
         consistency_result = await recovery.self_consistent_run(sprint, n=3, run_attempt=_attempt)
         winner = consistency_result.winner
@@ -293,7 +327,7 @@ async def execute_sprint(
             )
 
         gen_result, eval_result = await _run_one_attempt(
-            sprint, ctx, wt_path, memory, repomap, revision_feedback, mode=current_mode
+            sprint, ctx, wt_path, memory, repomap, revision_feedback, mode=current_mode, pool=pool
         )
         budget.record_spend(gen_result.cost_usd + eval_result.cost_usd)
         last_gen_result = gen_result
@@ -345,7 +379,7 @@ async def execute_sprint(
             sub.assigned_worktree = sub_wt_path
             sub_memory = retriever.get_context_for_task(sub.description)
             return await _run_one_attempt(
-                sub, ctx, sub_wt_path, sub_memory, repomap, mode=current_mode
+                sub, ctx, sub_wt_path, sub_memory, repomap, mode=current_mode, pool=pool
             )
 
         decomp = await recovery.adapt_failed_sprint(sprint, run_subsprint=_run_subsprint)
@@ -517,6 +551,19 @@ async def execute_session(
         _emit_session(EventType.SESSION_BYPASS.value, session_id=session.id)
 
     # ---- Phase 2: Execute waves ----
+    #
+    # One model pool per session (M2). Bound by the local RAM budget; the
+    # orchestrator + embedding models are pinned so on-demand coder/evaluator
+    # models evict around them instead of them. on_change pushes pool_state to
+    # the UI so the RAM meter is live. Constructed here (inside the running
+    # loop) so its asyncio primitives bind to the right event loop.
+    from .config import LOCAL_EMBED_MODEL, LOCAL_PLAN_MODEL
+
+    pool = ModelPool(
+        on_change=_broadcast,
+        pinned={LOCAL_PLAN_MODEL, LOCAL_EMBED_MODEL},
+    )
+    set_active_pool(pool)
 
     for wave_idx, wave in enumerate(dependency_waves(sprints)):
         _emit_session(EventType.WAVE_START.value, wave=wave_idx, sprint_count=len(wave))
@@ -548,6 +595,7 @@ async def execute_session(
                     _broadcast,
                     repomap=repomap,
                     mode_state=mode_state,
+                    pool=pool,
                 )
 
         results = await asyncio.gather(*[_run(s) for s in wave], return_exceptions=True)
