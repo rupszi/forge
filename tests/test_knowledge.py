@@ -85,11 +85,14 @@ class TestKnowledgeBase:
         assert len(lines) <= 5
 
     def test_get_context_for_task_token_budget(self, kb):
+        # Each item stays under the 500-char one-liner cap (the kb_guard limit),
+        # but enough of them together exceed the ~500-token context budget so
+        # the retriever must truncate.
         for i in range(10):
             kb.add(
                 "gotcha",
                 "auth",
-                f"A very long gotcha about authentication issue number {i} " * 10,
+                f"A gotcha about authentication issue number {i} with tokens and sessions " * 4,
                 f"s{i}",
                 0.9,
             )

@@ -15,7 +15,26 @@ class KnowledgeBase:
     def add(
         self, category: str, topic: str, content: str, source: str = "", confidence: float = 0.5
     ) -> int:
+        # Reject prompt-injection shapes before anything reaches the store
+        # (M3 / G-AGT-4). Clean one-liners only.
+        from .kb_guard import validate_kb_content
+
+        validate_kb_content(content)
         return self.db.add_knowledge(category, topic, content, source, confidence)
+
+    def reinforce(self, item_ids: list[int], *, helpful: bool) -> None:
+        """Nudge confidence for items that were injected into a task's context.
+
+        Called after a task settles: ``helpful=True`` when the task was
+        approved (the injected items earned their keep), ``False`` when it
+        failed. This is the confidence-reinforcement loop the audit found
+        stubbed — good items rise, bad items decay toward the prune floor.
+        """
+        for item_id in item_ids:
+            if helpful:
+                self.db.mark_knowledge_helpful(item_id)
+            else:
+                self.db.mark_knowledge_unhelpful(item_id)
 
     def search(
         self, query: str = "", topic: str = "", category: str = "", limit: int = 10

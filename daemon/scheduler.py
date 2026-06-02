@@ -267,8 +267,21 @@ async def execute_sprint(
 
     # ---- Memory context ----
 
-    memory = retriever.get_context_for_task(sprint.description)
+    memory, injected_kb_ids = retriever.get_context_and_ids(sprint.description)
     sprint_start = time.time()
+
+    def _reinforce(completed: bool) -> None:
+        """Confidence reinforcement (M3): nudge the KB items that were injected
+        into this sprint's context up (approved) or down (failed)."""
+        if not injected_kb_ids:
+            return
+        from .memory.knowledge import KnowledgeBase
+        from .safety import silent_catch
+
+        try:
+            KnowledgeBase(db).reinforce(injected_kb_ids, helpful=completed)
+        except Exception as e:
+            silent_catch(__name__, e)
 
     # ---- Self-Consistency branch for [critical] sprints ----
     #
@@ -297,6 +310,7 @@ async def execute_sprint(
                 sprint.error = "Self-Consistency: no attempt approved"
             episodic.store(session_id, sprint, gen_result, eval_result)
             _writeback_procedural(db, sprint, eval_result, time.time() - sprint_start)
+            _reinforce(sprint.status == "completed")
             db.save_sprint(sprint)
             _emit(
                 EventType.RECOVERY_CONSISTENCY_COMPLETE.value,
@@ -410,6 +424,7 @@ async def execute_sprint(
                 sub_count=len(decomp.sub_sprints),
             )
 
+    _reinforce(sprint.status == "completed")
     db.save_sprint(sprint)
     return sprint
 

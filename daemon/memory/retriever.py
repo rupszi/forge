@@ -100,18 +100,45 @@ def _extract_keywords(text: str) -> list[str]:
     ][:15]
 
 
+def merge_hybrid(
+    keyword_items: list[dict], vector_items: list[dict], limit: int = KB_MAX_CONTEXT_ITEMS
+) -> list[dict]:
+    """Merge keyword and vector candidate lists into one ranked, deduped list.
+
+    Each item carries a ``score`` (keyword relevance or cosine similarity).
+    Items present in both sources keep their *higher* score. Result is sorted
+    by score descending and truncated to ``limit``. Pure function so the
+    ranking contract is testable without a model or sqlite-vec.
+    """
+    best: dict[object, dict] = {}
+    for item in [*keyword_items, *vector_items]:
+        key = item.get("id", id(item))
+        prior = best.get(key)
+        if prior is None or item.get("score", 0.0) > prior.get("score", 0.0):
+            best[key] = item
+    ranked = sorted(best.values(), key=lambda i: i.get("score", 0.0), reverse=True)
+    return ranked[:limit]
+
+
 class Retriever:
     def __init__(self, db: ForgeDB):
         self.db = db
 
     def get_context_for_task(self, task_description: str) -> str:
         """Build memory context for an agent. Max ~500 tokens."""
+        return self.get_context_and_ids(task_description)[0]
+
+    def get_context_and_ids(self, task_description: str) -> tuple[str, list[int]]:
+        """Like :meth:`get_context_for_task` but also return the IDs of the KB
+        items injected, so the scheduler can reinforce their confidence after
+        the task settles (M3)."""
         keywords = _extract_keywords(task_description)
         if not keywords:
-            return ""
+            return "", []
 
         sections = []
         token_count = 0
+        injected_ids: list[int] = []
 
         # 1. Knowledge base items (max 5)
         kb_items = self.db.get_knowledge_for_task(task_description, limit=KB_MAX_CONTEXT_ITEMS)
@@ -124,6 +151,8 @@ class Retriever:
                     break
                 lines.append(line)
                 token_count += est
+                if "id" in item:
+                    injected_ids.append(item["id"])
             if len(lines) > 1:
                 sections.append("\n".join(lines))
 
@@ -170,4 +199,5 @@ class Retriever:
                     sections.append(f"- {content} (source: {r.get('url', 'unknown')})")
                     token_count += est
 
-        return "\n\n".join(sections) if sections else ""
+        context = "\n\n".join(sections) if sections else ""
+        return context, injected_ids

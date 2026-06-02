@@ -240,13 +240,18 @@ async def _handle_message_inner(
         return {"type": "knowledge_results", "items": results}
 
     if msg_type == "add_knowledge":
-        kid = kb.add(
-            category=msg.get("category", "gotcha"),
-            topic=msg.get("topic", "general"),
-            content=msg.get("content", ""),
-            source="user",
-            confidence=0.8,
-        )
+        from .memory.kb_guard import KBContentRejected
+
+        try:
+            kid = kb.add(
+                category=msg.get("category", "gotcha"),
+                topic=msg.get("topic", "general"),
+                content=msg.get("content", ""),
+                source="user",
+                confidence=0.8,
+            )
+        except KBContentRejected as e:
+            return {"type": "error", "error": f"knowledge rejected: {e}"}
         return {"type": "knowledge_updated", "id": kid}
 
     if msg_type == "delete_knowledge":

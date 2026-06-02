@@ -34,7 +34,7 @@ last_reviewed: 2026-06-02
 | 0 | M0 — Foundation & guardrails harness | ✅ | Offline egress test + config-budget tests pass (38 tests) |
 | 1 | M1 — Executor pivot (cloud → local default) | ✅ | Cloud gated behind opt-in; Ollama path egress-proven local; 953 tests green |
 | 1 | M2 — Model Pool Manager | ✅ | Forced squeeze evicts LRU, pins survive, unfittable fails fast, large serialized |
-| 1 | M3 — Memory upgrade (hybrid recall + reinforcement) | ⬜ | Repeat task skips a revision via cached KB/routing |
+| 1 | M3 — Memory upgrade (hybrid recall + reinforcement) | ✅ | Warm KB skips a revision + reinforces confidence; injection guard + research redaction live |
 | 1 | M4 — CLI completion + audit fixes | ⬜ | `plan/run/add/merge/review` work; cross-family enforced at runtime |
 | 1 | M5 — UI completion (5 stub panels + onboarding) | ⬜ | `pnpm build` clean; merge gate approve/reject works; locality indicator honest |
 | 2 | M6 — Tauri desktop shell + sidecar | ⬜ | Double-click `.app` runs an offline coding task end-to-end |
@@ -106,20 +106,21 @@ last_reviewed: 2026-06-02
 
 ---
 
-### M3 — Memory upgrade (hybrid recall + reinforcement)  ⬜
+### M3 — Memory upgrade (hybrid recall + reinforcement)  ✅
 *Goal: prove memory compounds across sessions.*
 
 **Tasks**
-- ⬜ Enable `sqlite-vec`; add local-embedding indexing for KB + episodic.
-- ⬜ Hybrid retriever: keyword (LIKE) ∪ vector similarity, dedup, ≤500-token budget preserved.
-- ⬜ Finish confidence reinforcement: mark injected KB items helpful/unhelpful post-task (close the audit stub).
-- ⬜ Redact research before KB/prompt injection; validate KB content on add (G-AGT-4).
+- ✅ Hybrid retriever merge: `retriever.merge_hybrid()` (keyword ∪ vector, dedup-by-id keeping best score, ranked, limit). Live vector pass activates under `FORGE_VECTOR_EPISODES`.
+- ✅ Confidence reinforcement: `Retriever.get_context_and_ids()` + `KnowledgeBase.reinforce()`; scheduler reinforces up/down after each verdict (normal, self-consistency, ADaPT). Closes the audit stub.
+- ✅ KB injection guard: `memory/kb_guard.validate_kb_content()` (fences, front-matter, chat markers, "ignore previous", fake SYSTEM, null bytes, over-length); wired into `KnowledgeBase.add` + ws `add_knowledge`.
+- ✅ Research redaction: `researcher._extract_relevant_content` `redact()`s before store/inject.
+- ⬜ sqlite-vec live KB indexing — kept opt-in (ADR-012); merge layer ready.
 
 **Tests**
-- `test_hybrid_retrieval_ranks`, `test_confidence_reinforcement`, `test_kb_injection_guard`, `test_research_redacted_before_store`.
-- Integration: `test_memory_compounds` — session 2 of a similar task skips ≥1 revision vs session 1.
+- `test_hybrid_retrieval.py` (5), `test_confidence_reinforcement.py` (6), `test_kb_guard.py` (12), `test_research_redaction.py` (1).
+- Integration `test_memory_compounds.py`: cold KB needs a revision; warm KB approves first attempt **and** confidence rises. Added shared `tmp_db` fixture.
 
-**Success gate (exit):** `test_memory_compounds` shows a measurable reduction in revisions/route-time on repeat; retrieval stays within the token budget; injection guard + redaction proven.
+**Success gate (exit):** ✅ warm KB cuts a revision + reinforces; token budget honored; injection guard + redaction proven. Full suite 1000 passed / 1 skipped, lint + format clean.
 
 ---
 

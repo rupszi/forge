@@ -54,8 +54,8 @@ class Researcher:
             ]
         return []
 
-    async def _extract_relevant_content(self, result: ResearchResult, error: str) -> str:
-        """Extract the relevant solution from search results."""
+    async def _extract_raw(self, result: ResearchResult, error: str) -> str:
+        """Run the extraction model; return its raw (unredacted) text."""
         prompt = (
             f"Extract the specific solution for this error from the content below.\n"
             f"Reply with 1-3 sentences only.\n\n"
@@ -64,6 +64,13 @@ class Researcher:
         )
         extraction = await ollama_executor.execute(prompt)
         return extraction.output[:300] if extraction.success else result.content[:300]
+
+    async def _extract_relevant_content(self, result: ResearchResult, error: str) -> str:
+        """Extract the relevant solution, redacting any secrets before it can
+        reach the research cache or an agent prompt (G-AGT-4 / audit fix)."""
+        from ..redact import redact
+
+        return redact(await self._extract_raw(result, error))
 
     async def search_for_error(self, error: str, context: str = "") -> ResearchResult | None:
         """Search web for a solution to a specific error."""
