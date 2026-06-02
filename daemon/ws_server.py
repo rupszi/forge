@@ -344,6 +344,15 @@ async def _handle_message_inner(
         result = get_store().add_path(path)
         return {"type": "attachments", "items": get_store().list(), **result}
 
+    if msg_type == "file.fetch":
+        # Lazy-load a single file's text on demand (path-scoped).
+        path = msg.get("path", "")
+        if not _validate_init_path(path):
+            return {"type": "error", "error": "path outside permitted scope"}
+        from .filefetch import read_file_text
+
+        return {"type": "file_content", "path": path, **read_file_text(path)}
+
     if msg_type == "attach.list":
         from .attachments import get_store
 

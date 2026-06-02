@@ -561,6 +561,28 @@ def cmd_doc(args):
     return 0
 
 
+def cmd_digest(args):
+    """Map-reduce a large file into a concise digest (saved as an artifact)."""
+    from . import artifacts, chunker, filefetch
+
+    fetched = filefetch.read_file_text(args.path, max_bytes=5_000_000)
+    if not fetched.get("ok"):
+        print(f"Cannot read {args.path}: {fetched.get('error')}")
+        return 1
+    text = fetched["content"]
+    print(f"Digesting {args.path} ({len(text)} chars) with the local model…")
+    digest = _run_async(
+        chunker.ollama_digest(text, target_tokens=int(getattr(args, "tokens", 800)))
+    )
+    if not digest.strip():
+        print("Digest came back empty (is Ollama running?).")
+        return 1
+    name = Path(args.path).stem + "-digest"
+    path = artifacts.save_artifact(name, digest, fmt="md")
+    print(f"\nWrote {path} ({len(digest)} chars)")
+    return 0
+
+
 def cmd_models(args):
     """List / pull the default local model lineup with a disk-safety guard."""
     from . import model_setup
@@ -1067,6 +1089,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--format", default="md", choices=["md", "txt", "html", "docx"], help="Export format"
     )
 
+    dg = sub.add_parser("digest", help="Map-reduce a large file into a concise digest")
+    dg.add_argument("path", help="File to digest")
+    dg.add_argument("--tokens", default=800, type=int, help="Target digest size (tokens)")
+
     mdl = sub.add_parser("models", help="List / pull the default local model lineup")
     mdl.add_argument("action", nargs="?", default="list", choices=["list", "pull"])
     mdl.add_argument(
@@ -1154,6 +1180,7 @@ def main():
         "review": cmd_review,
         "merge": cmd_merge,
         "doc": cmd_doc,
+        "digest": cmd_digest,
         "serve": cmd_serve,
         "tui": cmd_tui,
         "reset": cmd_reset,
