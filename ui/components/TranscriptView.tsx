@@ -65,7 +65,7 @@ export function TranscriptView({ current, onChange }: TranscriptViewProps) {
       </button>
 
       {open && (
-        <div className="absolute bottom-full mb-2 right-0 w-60 rounded-lg bg-[#12121a] border border-[#1e1e2e] shadow-xl z-50">
+        <div className="absolute top-full mt-2 right-0 w-60 rounded-lg bg-[#12121a] border border-[#1e1e2e] shadow-xl z-50">
           <div className="px-3 py-2 flex items-center justify-between border-b border-[#1e1e2e]">
             <span className="text-xs text-gray-500">Transcript view</span>
             <div className="flex items-center gap-1 text-[10px] text-gray-600">
