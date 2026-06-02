@@ -251,6 +251,29 @@ forge memory add gotcha auth "validate JWTs server-side"
 forge memory import                # pull in Claude Code auto-memory
 ```
 
+### 7.5 Extending context
+
+The model's window is finite; Forge keeps the agent from needing all of it at
+once and pushes the rest to disk. On top of context isolation (worktree per
+sprint), retrieval (the KB above), and the repo map, you have three explicit
+levers:
+
+- **Attach files/folders** — the dashboard's **Attach** button asks for a file
+  or folder path; the daemon reads the text and injects it into the agent's
+  context for the next plan/run (binary skipped, large files clipped, budget-
+  capped). Use it to hand the agent a spec, a log, or a reference file.
+- **Working memory scratchpad** — a notebook at `.forge/memories/` that persists
+  across the context window and is re-injected into later sprints. Path-scoped
+  (nothing escapes the folder). Anything written here survives even when the
+  live window is full.
+- **Auto-compaction** — when the assembled context grows large, Forge
+  summarizes it with a local model instead of chopping the tail off, so long
+  sessions don't lose the earlier context. On by default; `FORGE_AUTO_COMPACT=0`
+  to disable.
+
+And the simplest lever: **pick a long-context model** from the top-right model
+picker (e.g. a 128K-window model) when a task genuinely needs more room.
+
 ---
 
 ## 8. Documents
