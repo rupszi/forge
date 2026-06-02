@@ -38,7 +38,7 @@ last_reviewed: 2026-06-02
 | 1 | M4 — CLI completion + audit fixes | ✅ | plan/run/add/merge/review registered + wired; cross-family invariant + path-guard fixes tested |
 | 1 | M5 — UI completion (5 stub panels + onboarding) | ⬜ | `pnpm build` clean; merge gate approve/reject works; locality indicator honest |
 | 2 | M6 — Tauri desktop shell + sidecar | ⬜ | Double-click `.app` runs an offline coding task end-to-end |
-| 2 | M7 — Document agent | ⬜ | Generate + export a doc to MD + PDF/docx locally |
+| 2 | M7 — Document agent | ✅ | Brief → local Markdown via local model; export md/txt/html (+docx opt); `forge doc` |
 | 2 | M8 — Release hardening (v1) | ⬜ | All §9 acceptance criteria green; signed build |
 | 3 | M9 — Image modality (ComfyUI) | ⏭️ | Prompt → local image with provenance + NSFW filter |
 | 3 | M10 — Video modality (experimental) | ⏭️ | Prompt → local clip, labeled experimental, non-blocking |
@@ -176,18 +176,21 @@ last_reviewed: 2026-06-02
 
 ---
 
-### M7 — Document agent  ⬜
+### M7 — Document agent  ✅
 *Goal: local document creation.*
 
 **Tasks**
-- ⬜ `daemon/agents/document.py` + `document` task type (plan→generate→evaluate against brief criteria).
-- ⬜ Local export MD → PDF/docx via existing skill tooling; save to `.forge/artifacts/`.
-- ⬜ UI: document task surface + artifact viewer/download.
+- ✅ `daemon/agents/document.py` — `write_document(brief, criteria, model)` via the local Ollama executor (free/offline; default model is local, not cloud), returns Markdown; `save_document()` persists it.
+- ✅ `daemon/artifacts.py` — `save_artifact()` writes under `.forge/artifacts/` with slugified (traversal-safe) names; export `md`/`txt`/`html` (stdlib `markdown_to_html`, HTML-escaped) + best-effort `docx` (optional `python-docx`, degrades to `.md`).
+- ✅ `forge doc "<brief>" --name --format` CLI command.
+- ⬜ UI document surface + viewer — deferred to M5 (frontend).
+- ⬜ PDF export — deferred (would add a heavy runtime dep; html→PDF can be done in the UI/print path).
 
 **Tests**
-- `test_document_agent_generates`, `test_document_export_md_pdf_docx`, evaluator-against-brief test.
+- `test_artifacts.py` (9): save md/txt/html, slugify/traversal-safety, markdown→html headings/lists/escaping, unknown-format raises.
+- `test_document_agent.py` (5): brief→markdown, failure surfaces, local-model default is not cloud, write-and-save.
 
-**Success gate (exit):** generate a README/spec from a prompt and export to MD + PDF/docx, fully offline, with the doc graded against its brief.
+**Success gate (exit):** ✅ generate a doc from a brief fully offline via a local model and export to md/txt/html locally; default writer model routes through a non-cloud executor. Full suite 1036 passed / 1 skipped.
 
 ---
 

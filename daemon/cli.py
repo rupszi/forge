@@ -471,6 +471,21 @@ def cmd_merge(args):
     return 0
 
 
+def cmd_doc(args):
+    """Generate a document locally from a brief and save it under .forge/artifacts/."""
+    from .agents import document
+
+    result = _run_async(document.write_document(args.brief))
+    if not result.success:
+        print(f"Document generation failed: {result.error}")
+        return 1
+    name = getattr(args, "name", None) or "document"
+    fmt = getattr(args, "format", None) or "md"
+    path = document.save_document(result, name=name, fmt=fmt)
+    print(f"\nWrote {path} ({len(result.content)} chars, model {result.model})")
+    return 0
+
+
 def cmd_models(args):
     """List / pull the default local model lineup with a disk-safety guard."""
     from . import model_setup
@@ -934,6 +949,13 @@ def build_parser() -> argparse.ArgumentParser:
     mg.add_argument("--show", action="store_true", help="List pending worktrees (default)")
     mg.add_argument("--approve", action="store_true", help="Merge sprint branches into HEAD")
 
+    dc = sub.add_parser("doc", help="Generate a document locally from a brief")
+    dc.add_argument("brief", help="What the document should cover")
+    dc.add_argument("--name", default="document", help="Artifact file name")
+    dc.add_argument(
+        "--format", default="md", choices=["md", "txt", "html", "docx"], help="Export format"
+    )
+
     mdl = sub.add_parser("models", help="List / pull the default local model lineup")
     mdl.add_argument("action", nargs="?", default="list", choices=["list", "pull"])
     mdl.add_argument(
@@ -1020,6 +1042,7 @@ def main():
         "add": cmd_add,
         "review": cmd_review,
         "merge": cmd_merge,
+        "doc": cmd_doc,
         "serve": cmd_serve,
         "tui": cmd_tui,
         "reset": cmd_reset,
