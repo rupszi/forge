@@ -15,8 +15,22 @@ from __future__ import annotations
 
 from .config import MODEL_CONTEXT_LIMITS, local_ram_budget_gb
 
-# Dropdown presets (tokens).
-PRESETS = [4096, 8192, 16384, 32768, 65536, 131072]
+# Dropdown presets (tokens). The large ones (256K–2M) only become selectable
+# for models whose trained max reaches them AND when RAM allows — otherwise the
+# UI shows them disabled with the reason. Useful for long-context models
+# (Llama-4, MiniMax, Kimi) and cloud / big-GPU setups.
+PRESETS = [
+    4096,
+    8192,
+    16384,
+    32768,
+    65536,
+    131072,
+    262144,  # 256K
+    524288,  # 512K
+    1048576,  # 1M
+    2097152,  # 2M
+]
 
 _DEFAULT_MODEL_MAX = 32_000
 _OVERHEAD_GB = 2.0  # OS + daemon + activation headroom beyond weights + KV
@@ -92,7 +106,11 @@ def resolve_num_ctx(
 
 
 def _human(tokens: int) -> str:
-    return f"{tokens // 1024}K" if tokens % 1024 == 0 else str(tokens)
+    if tokens % (1024 * 1024) == 0:
+        return f"{tokens // (1024 * 1024)}M"
+    if tokens % 1024 == 0:
+        return f"{tokens // 1024}K"
+    return str(tokens)
 
 
 def options_for(model: str, ram_budget_gb: float | None = None) -> dict:

@@ -63,6 +63,34 @@ class TestResolveNumCtx:
         assert cw.resolve_num_ctx("qwen2.5-coder:7b", ram_budget_gb=36.0) >= 4096
 
 
+class TestPresets:
+    def test_includes_large_windows(self):
+        assert 262144 in cw.PRESETS  # 256K
+        assert 524288 in cw.PRESETS  # 512K
+        assert 1048576 in cw.PRESETS  # 1M
+        assert 2097152 in cw.PRESETS  # 2M
+
+    def test_human_labels(self):
+        assert cw._human(262144) == "256K"
+        assert cw._human(1048576) == "1M"
+        assert cw._human(2097152) == "2M"
+
+    def test_large_presets_disabled_on_small_model(self):
+        # qwen2.5-coder:7b maxes at 32K → the big windows are flagged as
+        # exceeding the model, so the UI greys them out (not hidden).
+        opts = cw.options_for("qwen2.5-coder:7b", ram_budget_gb=36.0)
+        for tokens in (262144, 1048576, 2097152):
+            p = next(x for x in opts["presets"] if x["tokens"] == tokens)
+            assert p["exceeds_model"] is True
+
+    def test_large_preset_available_for_long_context_model(self):
+        # llama-4-scout advertises a 10M window, so 1M is within the model max
+        # (RAM may still gate it, but it's not flagged as exceeding the model).
+        opts = cw.options_for("llama-4-scout", ram_budget_gb=36.0)
+        one_m = next(x for x in opts["presets"] if x["tokens"] == 1048576)
+        assert one_m["exceeds_model"] is False
+
+
 class TestOptionsFor:
     def test_options_mark_fit_and_model_max(self):
         opts = cw.options_for("qwen2.5-coder:7b", ram_budget_gb=36.0)

@@ -28,10 +28,13 @@ export function ContextSizePicker({ options, onChange }: ContextSizePickerProps)
 
   if (!options) return null;
 
+  const human = (t: number) =>
+    t % (1024 * 1024) === 0 ? `${t / (1024 * 1024)}M` : `${Math.round(t / 1024)}K`;
+
   const label =
     options.setting === "auto"
-      ? `Auto (${Math.round(options.auto / 1024)}K)`
-      : `${Math.round((options.setting as number) / 1024)}K`;
+      ? `Auto (${human(options.auto)})`
+      : human(options.setting as number);
 
   return (
     <div className="relative inline-block" ref={ref}>
