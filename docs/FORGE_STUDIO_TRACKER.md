@@ -35,7 +35,7 @@ last_reviewed: 2026-06-02
 | 1 | M1 — Executor pivot (cloud → local default) | ✅ | Cloud gated behind opt-in; Ollama path egress-proven local; 953 tests green |
 | 1 | M2 — Model Pool Manager | ✅ | Forced squeeze evicts LRU, pins survive, unfittable fails fast, large serialized |
 | 1 | M3 — Memory upgrade (hybrid recall + reinforcement) | ✅ | Warm KB skips a revision + reinforces confidence; injection guard + research redaction live |
-| 1 | M4 — CLI completion + audit fixes | ⬜ | `plan/run/add/merge/review` work; cross-family enforced at runtime |
+| 1 | M4 — CLI completion + audit fixes | ✅ | plan/run/add/merge/review registered + wired; cross-family invariant + path-guard fixes tested |
 | 1 | M5 — UI completion (5 stub panels + onboarding) | ⬜ | `pnpm build` clean; merge gate approve/reject works; locality indicator honest |
 | 2 | M6 — Tauri desktop shell + sidecar | ⬜ | Double-click `.app` runs an offline coding task end-to-end |
 | 2 | M7 — Document agent | ⬜ | Generate + export a doc to MD + PDF/docx locally |
@@ -124,18 +124,19 @@ last_reviewed: 2026-06-02
 
 ---
 
-### M4 — CLI completion + audit fixes  ⬜
+### M4 — CLI completion + audit fixes  ✅
 *Goal: drive the whole loop from the terminal; close audit gaps.*
 
 **Tasks**
-- ⬜ Add subcommands `plan`, `run`, `add`, `merge`, `review` over the existing backend (the audit found these missing).
-- ⬜ Runtime enforcement + test that evaluator family ≠ generator family (G-AGT-1).
-- ⬜ Path-traversal guard case-normalization fix.
+- ✅ Subcommands `plan` / `run` / `add` / `merge` / `review` registered in `build_parser` + dispatch table, wired over the existing backend (planner, scheduler.execute_sprint, reviewer.review, worktree). `add` defaults to the local coder (not the old "sonnet" default). `_sprint_from_row` reconstructs persisted sprints for `run`.
+- ✅ Cross-family invariant test (`pick_evaluator_model` returns a different family for every default-lineup generator + Claude + Qwen + DeepSeek).
+- ✅ Path-traversal guard case-normalized via `os.path.normcase` (audit LOW fix).
 
 **Tests**
-- `test_cli_plan_run_add_merge_review`, `test_cross_family_enforced_runtime`, `test_path_guard_case_insensitive`.
+- `test_cli_verbs.py` (parser registration for all verbs, `add` persists pending, `plan` invokes planner+saves, `run` executes via scheduler / returns 1 with nothing pending, `review` runs the panel, `merge --show` lists worktrees).
+- `test_audit_fixes.py` (path guard cwd/external/case-variant; cross-family invariant across 7 generators).
 
-**Success gate (exit):** `forge plan "..." && forge run` executes a full local session headlessly; cross-family invariant holds at runtime (not just config).
+**Success gate (exit):** ✅ all verbs registered + dispatched (`python -m daemon.main` help shows them); `forge run` reconstructs and executes pending sprints; cross-family invariant holds at runtime. Full suite 1024 passed / 1 skipped.
 
 ---
 

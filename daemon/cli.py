@@ -281,6 +281,196 @@ def cmd_budget(args):
     db.close()
 
 
+def _sprint_from_row(row: dict):
+    """Reconstruct a SprintContract from a DB row dict (JSON list fields may be
+    stored as strings)."""
+    import json
+
+    from .models import SprintContract
+
+    def _list(v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (ValueError, TypeError):
+                return []
+        return v or []
+
+    return SprintContract(
+        id=row.get("id", ""),
+        session_id=row.get("session_id", ""),
+        description=row.get("description", ""),
+        done_criteria=_list(row.get("done_criteria")),
+        depends_on=_list(row.get("depends_on")),
+        files_scope=_list(row.get("files_scope")),
+        assigned_model=row.get("assigned_model") or "",
+        status=row.get("status", "pending"),
+        estimated_tokens=row.get("estimated_tokens", 0) or 0,
+    )
+
+
+def cmd_add(args):
+    """Add a single task as a pending sprint (skips the planner)."""
+    from .config import LOCAL_CODE_MODEL
+    from .models import SprintContract
+
+    db = _get_db()
+    sprint = SprintContract(
+        session_id="cli-adhoc",
+        description=args.description,
+        done_criteria=["Task completed as described"],
+        assigned_model=getattr(args, "model", None) or LOCAL_CODE_MODEL,
+        status="pending",
+    )
+    db.save_sprint(sprint)
+    print(f"Added pending sprint {sprint.id}: {sprint.description}")
+    print("Run it with:  forge run")
+    db.close()
+    return 0
+
+
+def cmd_plan(args):
+    """Decompose an objective into pending sprints (persisted for `forge run`)."""
+    from .agents import planner
+    from .memory.retriever import Retriever
+    from .models import Session
+
+    db = _get_db()
+    ctx = _run_async(scan_project("."))
+    session = Session(project_path=ctx.path, objective=args.objective)
+    db.save_session(session)
+    kb_context = Retriever(db).get_context_for_task(args.objective)
+    sprints = _run_async(planner.plan(args.objective, ctx, session.id, kb_context))
+    for s in sprints:
+        db.save_sprint(s)
+    print(f"\nPlan: {len(sprints)} sprint(s) for: {args.objective}")
+    for s in sprints:
+        crit = " [critical]" if getattr(s, "critical", False) else ""
+        print(f"  [{s.id}] {s.description} ({s.assigned_model}){crit}")
+        for c in s.done_criteria:
+            print(f"        - {c}")
+    print("\nRun them with:  forge run")
+    db.close()
+    return 0
+
+
+def cmd_run(args):
+    """Execute pending sprints (all, or one by id) through the harness."""
+    from . import scheduler
+    from .budget import BudgetController
+    from .memory.episodic import EpisodicStore
+    from .memory.retriever import Retriever
+
+    db = _get_db()
+    ctx = _run_async(scan_project("."))
+    sprint_id = getattr(args, "sprint_id", None)
+
+    pending = []
+    for sess in db.list_sessions(limit=10):
+        for row in db.get_sprints_for_session(sess["id"]):
+            if row.get("status") == "pending" and (not sprint_id or row.get("id") == sprint_id):
+                pending.append(row)
+    # Ad-hoc sprints from `forge add` live under a synthetic session id.
+    for row in db.get_sprints_for_session("cli-adhoc"):
+        if row.get("status") == "pending" and (not sprint_id or row.get("id") == sprint_id):
+            pending.append(row)
+
+    if not pending:
+        print('No pending sprints. Create some with `forge plan "..."` or `forge add "..."`.')
+        db.close()
+        return 1
+
+    budget = BudgetController()
+    retriever = Retriever(db)
+    episodic = EpisodicStore(db)
+
+    completed = 0
+    for row in pending:
+        sprint = _sprint_from_row(row)
+        print(f"\n→ {sprint.id}: {sprint.description}")
+        result = _run_async(
+            scheduler.execute_sprint(
+                sprint, ctx, sprint.session_id or "cli-run", db, budget, retriever, episodic
+            )
+        )
+        status = getattr(result, "status", "unknown")
+        print(f"  {status}")
+        if status == "completed":
+            completed += 1
+    print(f"\n{completed}/{len(pending)} sprint(s) completed.")
+    db.close()
+    return 0 if completed == len(pending) else 1
+
+
+def cmd_review(args):
+    """Run the multi-perspective review panel on a sprint's worktree diff."""
+    from . import worktree
+    from .agents import reviewer
+
+    db = _get_db()
+    row = db.get_sprint(args.sprint_id)
+    if not row:
+        print(f"No sprint {args.sprint_id}")
+        db.close()
+        return 1
+    try:
+        diff = _run_async(worktree.get_diff(args.sprint_id))
+    except Exception as e:
+        print(f"Could not read worktree diff: {e}")
+        db.close()
+        return 1
+    if not diff.strip():
+        print("Empty diff — nothing to review.")
+        db.close()
+        return 1
+    result = _run_async(reviewer.review(diff))
+    print(f"\nReview verdict: {result.overall_verdict}")
+    for p in result.perspectives:
+        print(f"  [{p.name}] {p.verdict}")
+    if result.critical_issues:
+        print("\nCritical issues:")
+        for issue in result.critical_issues:
+            print(f"  - {issue}")
+    db.close()
+    return 0
+
+
+def cmd_merge(args):
+    """Show or approve worktree merges (the merge gate, from the terminal)."""
+    from . import worktree
+
+    worktrees = _run_async(worktree.list_worktrees())
+    # The main checkout shows up too; only sprint worktrees live under .forge.
+    sprint_wts = [w for w in worktrees if ".forge" in (w.get("path") or "")]
+
+    if not sprint_wts:
+        print("No sprint worktrees to merge.")
+        return 0
+
+    if getattr(args, "show", False) or not getattr(args, "approve", False):
+        print("\nPending worktrees:")
+        for w in sprint_wts:
+            branch = w.get("branch", "(detached)")
+            print(f"  {w['path']}  {branch}")
+        print("\nApprove with:  forge merge --approve")
+        return 0
+
+    # --approve: merge each sprint branch into the current branch.
+    merged = 0
+    for w in sprint_wts:
+        branch = (w.get("branch") or "").replace("refs/heads/", "")
+        if not branch:
+            continue
+        code, _out, err = _run_async(worktree._run_git(["merge", "--no-ff", branch]))
+        if code == 0:
+            print(f"  ✓ merged {branch}")
+            merged += 1
+        else:
+            print(f"  ✗ conflict merging {branch}: {err.strip()[:120]}")
+    print(f"\n{merged}/{len(sprint_wts)} merged.")
+    return 0
+
+
 def cmd_models(args):
     """List / pull the default local model lineup with a disk-safety guard."""
     from . import model_setup
@@ -727,6 +917,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub.add_parser("reset", help="Clear tasks (keep KB)")
 
+    pl = sub.add_parser("plan", help="Decompose an objective into pending sprints")
+    pl.add_argument("objective", help="What to build")
+
+    rn = sub.add_parser("run", help="Execute pending sprints (all, or one by id)")
+    rn.add_argument("sprint_id", nargs="?", default=None, help="Run only this sprint")
+
+    ad = sub.add_parser("add", help="Add a single task as a pending sprint (skip planner)")
+    ad.add_argument("description", help="The task to do")
+    ad.add_argument("--model", default=None, help="Override the assigned model")
+
+    rv = sub.add_parser("review", help="Run the multi-perspective review panel on a sprint")
+    rv.add_argument("sprint_id", help="Sprint whose worktree diff to review")
+
+    mg = sub.add_parser("merge", help="Show or approve worktree merges (the merge gate)")
+    mg.add_argument("--show", action="store_true", help="List pending worktrees (default)")
+    mg.add_argument("--approve", action="store_true", help="Merge sprint branches into HEAD")
+
     mdl = sub.add_parser("models", help="List / pull the default local model lineup")
     mdl.add_argument("action", nargs="?", default="list", choices=["list", "pull"])
     mdl.add_argument(
@@ -808,6 +1015,11 @@ def main():
         "memory": cmd_memory,
         "budget": cmd_budget,
         "models": cmd_models,
+        "plan": cmd_plan,
+        "run": cmd_run,
+        "add": cmd_add,
+        "review": cmd_review,
+        "merge": cmd_merge,
         "serve": cmd_serve,
         "tui": cmd_tui,
         "reset": cmd_reset,
