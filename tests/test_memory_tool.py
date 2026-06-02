@@ -93,7 +93,9 @@ class TestDispatch:
     def test_create_then_view_via_dispatch(self, tmp_path, monkeypatch):
         from daemon import memory_tool
 
-        monkeypatch.setattr(memory_tool, "default_tool", lambda: MemoryTool(str(tmp_path / "mem")))
+        monkeypatch.setattr(
+            memory_tool, "default_tool", lambda *a, **k: MemoryTool(str(tmp_path / "mem"))
+        )
         r = memory_tool.dispatch("create", {"path": "todo.md", "content": "ship it"})
         assert r["ok"] is True
         assert "todo.md" in r["files"]
@@ -103,14 +105,18 @@ class TestDispatch:
     def test_unknown_command(self, tmp_path, monkeypatch):
         from daemon import memory_tool
 
-        monkeypatch.setattr(memory_tool, "default_tool", lambda: MemoryTool(str(tmp_path / "mem")))
+        monkeypatch.setattr(
+            memory_tool, "default_tool", lambda *a, **k: MemoryTool(str(tmp_path / "mem"))
+        )
         r = memory_tool.dispatch("rm_rf", {"path": "x"})
         assert r["ok"] is False
 
     def test_traversal_via_dispatch_blocked(self, tmp_path, monkeypatch):
         from daemon import memory_tool
 
-        monkeypatch.setattr(memory_tool, "default_tool", lambda: MemoryTool(str(tmp_path / "mem")))
+        monkeypatch.setattr(
+            memory_tool, "default_tool", lambda *a, **k: MemoryTool(str(tmp_path / "mem"))
+        )
         r = memory_tool.dispatch("create", {"path": "../escape.md", "content": "x"})
         assert r["ok"] is False
         assert "escape" in r["error"].lower() or "'..'" in r["error"]

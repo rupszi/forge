@@ -283,7 +283,10 @@ async def execute_sprint(
     from .safety import silent_catch as _silent
 
     try:
-        _mem_ctx = _default_mem_tool().context()
+        # Scope the scratchpad to THIS (project, session) so a prior session's
+        # notes never re-inject into this sprint, and no other project's notes
+        # leak in (audit F3).
+        _mem_ctx = _default_mem_tool(ctx.path, session_id).context()
         if _mem_ctx:
             memory = f"{memory}\n\n{_mem_ctx}" if memory else _mem_ctx
     except Exception as e:  # never let scratchpad I/O break a sprint

@@ -2,19 +2,26 @@
 
 Implements Anthropic's memory-tool command set (``view`` / ``create`` /
 ``str_replace`` / ``insert`` / ``delete`` / ``rename``) over a per-session
-directory under ``.forge/memories/<session>/``. This is the model's (and the
-user's) *working notebook* — distinct from the auto-extracted knowledge base.
-Anything written here survives the model's context window and is re-injected
-into later sprints in the same session via :meth:`context`.
+directory under ``<project>/.forge/memories/<session>/``. This is the model's
+(and the user's) *working notebook* — distinct from the auto-extracted
+knowledge base. Anything written here survives the model's context window and
+is re-injected into later sprints in the same session via :meth:`context`.
+
+The scratchpad is scoped to a **(project, session)** pair so notes never bleed
+across sessions or projects (audit F3, 2026-06-04): :func:`default_tool` derives
+its root from the connected project's path plus the session id. Callers without
+a session (the manual WS surface) get a project-local ``_shared`` bucket — still
+under the project's ``.forge/``, never the daemon's CWD.
 
 Security: every path is contained to the memory root. Absolute paths, ``..``
 segments, and symlink escapes all raise ``MemoryViolation`` — nothing outside
-the root can be read or written.
+the root can be read or written. The session segment is sanitized to a safe
+slug before it touches the filesystem.
 """
 
 from __future__ import annotations
 
-import os
+import re
 from pathlib import Path
 
 from .config import FORGE_DIR
@@ -125,9 +132,32 @@ class MemoryTool:
         return "".join(out)
 
 
-def default_tool() -> MemoryTool:
-    """The project's working-memory notebook at ``.forge/memories/``."""
-    return MemoryTool(os.path.join(FORGE_DIR, "memories"))
+_SAFE_SEGMENT = re.compile(r"[^A-Za-z0-9._-]")
+
+
+def _safe_segment(value: str) -> str:
+    """Reduce an arbitrary id to a single safe path segment.
+
+    Session ids are internally generated (uuid-shaped) but we sanitize anyway:
+    any ``/``, ``..``, or other separator collapses to ``_`` so a crafted id
+    can never escape ``memories/``. Empty results fall back to ``_shared``.
+    """
+    slug = _SAFE_SEGMENT.sub("_", (value or "").strip()).strip(".")
+    return slug or "_shared"
+
+
+def default_tool(project_path: str | None = None, session_id: str | None = None) -> MemoryTool:
+    """The working-memory notebook for one ``(project, session)`` pair.
+
+    Root is ``<project_path>/.forge/memories/<session_id>/``. Without a
+    ``project_path`` the daemon-relative ``.forge`` is used; without a
+    ``session_id`` the project-local ``_shared`` bucket is used. Either way the
+    scratchpad is isolated per session so prior sessions' notes never re-inject
+    into a later sprint, and one project's notes never reach another (F3).
+    """
+    root = Path(project_path) / FORGE_DIR if project_path else Path(FORGE_DIR)
+    base = root / "memories" / _safe_segment(session_id or "_shared")
+    return MemoryTool(str(base))
 
 
 # Commands the WS surface may dispatch (read + write).
@@ -135,10 +165,15 @@ _COMMANDS = {"view", "create", "str_replace", "insert", "delete", "rename"}
 
 
 def dispatch(command: str, args: dict) -> dict:
-    """Run a memory-tool command from the WS layer. Returns ``{ok, result|error}``."""
+    """Run a memory-tool command from the WS layer. Returns ``{ok, result|error}``.
+
+    ``args`` may carry ``project_path`` and ``session_id`` so the manual WS
+    surface scopes to the same per-(project, session) bucket the scheduler uses
+    (F3). When absent, the project-local ``_shared`` bucket is used.
+    """
     if command not in _COMMANDS:
         return {"ok": False, "error": f"unknown memory command: {command!r}"}
-    tool = default_tool()
+    tool = default_tool(args.get("project_path"), args.get("session_id"))
     try:
         method = getattr(tool, command)
         result = method(*_args_for(command, args))
