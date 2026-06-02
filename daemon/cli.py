@@ -281,6 +281,81 @@ def cmd_budget(args):
     db.close()
 
 
+def cmd_models(args):
+    """List / pull the default local model lineup with a disk-safety guard."""
+    from . import model_setup
+
+    action = getattr(args, "action", "list") or "list"
+    models = model_setup.DEFAULT_MODEL_SET
+    present = _ollama_present_models()
+
+    if action == "list":
+        print("\nDefault local model lineup:")
+        for m in models:
+            mark = "✓ present" if m.name in present else "· not pulled"
+            print(f"  {m.name:<28} ~{m.size_gb:>5.1f} GB   {mark}")
+        free = model_setup.free_disk_gb(".")
+        print(f"\nFree disk: {free:.1f} GB")
+        return 0
+
+    if action == "pull":
+        free = model_setup.free_disk_gb(".")
+        plan = model_setup.plan_pull(models, free_gb=free, present=present)
+        print(f"\nPlan: pull {len(plan.to_pull)} model(s), ~{plan.total_gb:.1f} GB")
+        for m in plan.to_pull:
+            print(f"  + {m.name}  (~{m.size_gb:.1f} GB)")
+        print(f"Free disk: {plan.free_gb:.1f} GB  (headroom {plan.headroom_gb:.1f} GB)")
+        if not plan.ok:
+            print(f"\n✗ Refused: {plan.refused_reason}")
+            return 1
+        if getattr(args, "dry_run", False):
+            print("\n(dry run — nothing pulled)")
+            return 0
+        for m in plan.to_pull:
+            print(f"\n→ ollama pull {m.name}")
+            rc = _ollama_pull(m.name)
+            if rc != 0:
+                print(f"✗ pull failed for {m.name} (exit {rc})")
+                return rc
+        print("\n✓ models ready")
+        return 0
+
+    print(f"Unknown models action: {action}")
+    return 1
+
+
+def _ollama_present_models() -> set[str]:
+    """Names of locally-installed Ollama models (empty set if Ollama absent)."""
+    import shutil
+    import subprocess
+
+    if not shutil.which("ollama"):
+        return set()
+    try:
+        out = subprocess.run(
+            ["ollama", "list"], capture_output=True, text=True, timeout=10, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    names: set[str] = set()
+    for line in out.stdout.splitlines()[1:]:
+        parts = line.split()
+        if parts:
+            # ``ollama list`` shows "name:tag"; record both the full and base name.
+            names.add(parts[0])
+            names.add(parts[0].split(":")[0])
+    return names
+
+
+def _ollama_pull(name: str) -> int:
+    import subprocess
+
+    try:
+        return subprocess.run(["ollama", "pull", name], check=False).returncode
+    except (OSError, subprocess.SubprocessError):
+        return 1
+
+
 def cmd_serve(args):
     """Start daemon + open browser dashboard.
 
@@ -651,6 +726,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Launch the Textual terminal UI (Codex/Claude-Code-style; needs forge[tui] extra)",
     )
     sub.add_parser("reset", help="Clear tasks (keep KB)")
+
+    mdl = sub.add_parser("models", help="List / pull the default local model lineup")
+    mdl.add_argument("action", nargs="?", default="list", choices=["list", "pull"])
+    mdl.add_argument(
+        "--dry-run", action="store_true", help="Show the pull plan without downloading"
+    )
     wiz = sub.add_parser(
         "wizard",
         help="Run the first-run connector setup wizard (idempotent; safe to re-run)",
@@ -726,6 +807,7 @@ def main():
         "doctor": cmd_doctor,
         "memory": cmd_memory,
         "budget": cmd_budget,
+        "models": cmd_models,
         "serve": cmd_serve,
         "tui": cmd_tui,
         "reset": cmd_reset,

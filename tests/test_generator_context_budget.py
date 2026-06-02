@@ -102,7 +102,9 @@ def test_build_prompt_no_truncation_when_target_model_unspecified():
 # ---- _select_executor dispatch ----
 
 
-def test_select_executor_anthropic_to_claude_code():
+def test_select_executor_anthropic_to_claude_code(monkeypatch):
+    """With cloud opted in, Anthropic models route to claude_code."""
+    monkeypatch.setenv("FORGE_CLOUD_ENABLED", "1")
     from daemon.agents.generator import _select_executor
     from daemon.executors import claude_code
 
@@ -110,14 +112,26 @@ def test_select_executor_anthropic_to_claude_code():
     assert _select_executor(sprint) is claude_code
 
 
-def test_select_executor_legacy_alias_to_claude_code():
-    """Legacy ``sonnet`` / ``opus`` / ``haiku`` aliases route to claude_code."""
+def test_select_executor_legacy_alias_to_claude_code(monkeypatch):
+    """Legacy ``sonnet`` / ``opus`` / ``haiku`` aliases route to claude_code (cloud on)."""
+    monkeypatch.setenv("FORGE_CLOUD_ENABLED", "1")
     from daemon.agents.generator import _select_executor
     from daemon.executors import claude_code
 
     for alias in ("sonnet", "opus", "haiku"):
         sprint = SprintContract(description="X", done_criteria=["Y"], assigned_model=alias)
         assert _select_executor(sprint) is claude_code
+
+
+def test_select_executor_anthropic_blocked_when_cloud_disabled(monkeypatch):
+    """Local-first gate: Anthropic models refuse to dispatch with cloud off."""
+    monkeypatch.delenv("FORGE_CLOUD_ENABLED", raising=False)
+    from daemon.agents.generator import _select_executor
+    from daemon.routing import CloudDisabledError
+
+    sprint = SprintContract(description="X", done_criteria=["Y"], assigned_model="claude-sonnet-4")
+    with pytest.raises(CloudDisabledError):
+        _select_executor(sprint)
 
 
 def test_select_executor_open_weight_default_ollama(monkeypatch):

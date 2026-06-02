@@ -32,6 +32,7 @@ import logging
 from ..config import MODEL_CONTEXT_LIMITS
 from ..executors import (
     claude_code as claude_executor,
+    mlx as mlx_executor,
     ollama as ollama_executor,
     openai_compatible as openai_compatible_executor,
 )
@@ -154,6 +155,7 @@ _EXECUTOR_MAP = {
     "claude_code": claude_executor,
     "ollama": ollama_executor,
     "openai_compatible": openai_compatible_executor,
+    "mlx": mlx_executor,
 }
 
 
@@ -164,12 +166,29 @@ def _select_executor(sprint: SprintContract):
     (``"opus"``, ``"sonnet"``, ``"haiku"``) routing to claude_code even
     when ``model_family`` returns "unknown" for them. The shared
     ``routing.select_executor`` already covers full-name Claudes.
-    """
-    if sprint.assigned_model in ("opus", "sonnet", "haiku"):
-        return claude_executor
-    from .. import routing
 
-    return _EXECUTOR_MAP[routing.select_executor(sprint.assigned_model)]
+    Local-first gate (G-LOC-2): if the resolved executor reaches the cloud
+    and ``FORGE_CLOUD_ENABLED`` is off, raise ``CloudDisabledError`` rather
+    than dial out silently or swap the user's model behind their back.
+    """
+    from .. import routing
+    from ..config import cloud_enabled
+
+    model = sprint.assigned_model
+    if model in ("opus", "sonnet", "haiku"):
+        executor_str = "claude_code"
+    else:
+        executor_str = routing.select_executor(model)
+
+    if routing.is_cloud_executor(executor_str) and not cloud_enabled():
+        msg = (
+            f"model {model!r} routes to the cloud executor {executor_str!r}, but "
+            "FORGE_CLOUD_ENABLED is off. Forge Studio is local-first: enable cloud "
+            "explicitly or assign a local model."
+        )
+        raise routing.CloudDisabledError(msg)
+
+    return _EXECUTOR_MAP[executor_str]
 
 
 async def generate(

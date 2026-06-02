@@ -25,6 +25,7 @@ import websockets
 from .budget import BudgetController
 from .config import WS_HOST, WS_PORT
 from .db import ForgeDB
+from .locality import locality_state
 from .memory.knowledge import KnowledgeBase
 from .mode import InvalidMode, ModeState
 from .models import ProjectContext
@@ -205,6 +206,7 @@ async def _handle_message_inner(
             **ctx.to_dict(),
             "knowledge_count": kb.count(),
             "billing_tier": detect_tier(path),
+            "locality": locality_state(),
         }
 
     if msg_type == "status":
@@ -214,7 +216,11 @@ async def _handle_message_inner(
             "knowledge_count": kb.count(),
             "budget": budget.to_dict(),
             "table_counts": db.table_counts(),
+            "locality": locality_state(),
         }
+
+    if msg_type == "locality":
+        return locality_state()
 
     if msg_type == "plan":
         objective = msg.get("objective", "")

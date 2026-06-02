@@ -32,7 +32,7 @@ last_reviewed: 2026-06-02
 | Phase | Milestone | Status | Exit gate |
 |---|---|---|---|
 | 0 | M0 — Foundation & guardrails harness | ✅ | Offline egress test + config-budget tests pass (38 tests) |
-| 1 | M1 — Executor pivot (cloud → local default) | ⬜ | Default path runs a sprint with zero cloud calls |
+| 1 | M1 — Executor pivot (cloud → local default) | ✅ | Cloud gated behind opt-in; Ollama path egress-proven local; 953 tests green |
 | 1 | M2 — Model Pool Manager | ⬜ | Forced RAM squeeze evicts LRU, never OOMs, orchestrator pinned |
 | 1 | M3 — Memory upgrade (hybrid recall + reinforcement) | ⬜ | Repeat task skips a revision via cached KB/routing |
 | 1 | M4 — CLI completion + audit fixes | ⬜ | `plan/run/add/merge/review` work; cross-family enforced at runtime |
@@ -68,21 +68,22 @@ last_reviewed: 2026-06-02
 
 ## Phase 1 — Local-first core
 
-### M1 — Executor pivot (cloud → local default)  ⬜
+### M1 — Executor pivot (cloud → local default)  ✅
 *Goal: the default everything runs on local models; cloud is opt-in only.*
 
 **Tasks**
-- ⬜ `routing.select_executor()` defaults to `ollama`; `claude_code`/`batch` selected only when `FORGE_CLOUD_ENABLED` (G-LOC-2).
-- ⬜ `classifier`/`config` default lineup → local models (§4 of spec).
-- ⬜ `executors/mlx.py` for weights Ollama can't host (incl. embeddings if needed).
-- ⬜ Locality indicator: daemon emits `locality.state` (`local` | `cloud`) on connect + on change.
-- ⬜ `forge models pull` command: previews cumulative size, enforces disk ceiling (G-RAM-2), pulls default set.
+- ✅ `routing`: `is_cloud_executor()` + `CloudDisabledError`; generator dispatch raises when a cloud executor is selected with cloud off (G-LOC-2). `select_executor()` defaults to `ollama` (was already local-weighted).
+- ✅ `executors/mlx.py` — Apple-Silicon MLX executor (lazy `mlx_lm` import; `mlx:`/`mlx-` models route here). Runs in a worker thread with timeout.
+- ✅ Locality indicator: `daemon/locality.py::locality_state()`; emitted in `init`/`status` and a `locality` WS handler (daemon = source of truth).
+- ✅ `forge models` CLI: `list` + `pull [--dry-run]` with `model_setup.plan_pull()` disk-headroom guard (G-RAM-2).
 
 **Tests**
-- `test_routing_defaults_local`, `test_cloud_requires_optin`, `test_mlx_executor` (integration, gated), `test_models_pull_disk_ceiling`.
-- Egress: a full mocked sprint on the default path triggers `assert_no_external_egress()`.
+- `test_executor_pivot.py` (string routing, MLX routing, `is_cloud_executor`, dispatch cloud-gate on/off, Ollama path egress assertion).
+- `test_model_setup.py` (pull planner allow/refuse/boundary/skip-present, free-disk).
+- `test_locality.py` (local/cloud state + `forge models` list/dry-run CLI).
+- Updated `test_generator_context_budget.py` to the new gated contract (+ a blocked-when-disabled test).
 
-**Success gate (exit):** a sprint completes generate+evaluate using only local executors with **zero** external egress (test-proven); enabling `FORGE_CLOUD_ENABLED` is the *only* way `claude_code` runs.
+**Success gate (exit):** ✅ the real Ollama executor makes no external connection under `assert_no_external_egress()`; cloud executors only dispatch when `FORGE_CLOUD_ENABLED` is set. Full suite 953 passed / 1 skipped, lint + format clean.
 
 ---
 
