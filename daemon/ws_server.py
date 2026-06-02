@@ -321,6 +321,14 @@ async def _handle_message_inner(
         get_store().clear()
         return {"type": "attachments", "items": [], "ok": True, "cleared": True}
 
+    if msg_type == "memory_tool":
+        # Working-memory scratchpad (.forge/memories/). Path-scoped inside the
+        # tool itself; here we just dispatch the command.
+        from . import memory_tool
+
+        result = memory_tool.dispatch(msg.get("command", ""), msg)
+        return {"type": "memory_tool", **result}
+
     if msg_type == "branches.list":
         # Folder/branch picker (onboarding). Path is scoped to home/cwd.
         path = msg.get("path", ".")

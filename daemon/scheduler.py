@@ -278,6 +278,17 @@ async def execute_sprint(
     if _attach_ctx:
         memory = f"{memory}\n\n{_attach_ctx}" if memory else _attach_ctx
 
+    # Working-memory scratchpad (.forge/memories/) — persists across sprints.
+    from .memory_tool import default_tool as _default_mem_tool
+    from .safety import silent_catch as _silent
+
+    try:
+        _mem_ctx = _default_mem_tool().context()
+        if _mem_ctx:
+            memory = f"{memory}\n\n{_mem_ctx}" if memory else _mem_ctx
+    except Exception as e:  # never let scratchpad I/O break a sprint
+        _silent(__name__, e)
+
     sprint_start = time.time()
 
     def _reinforce(completed: bool) -> None:
