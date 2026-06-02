@@ -10,6 +10,66 @@ from __future__ import annotations
 
 import os
 
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Read a boolean env var. Accepts 1/true/yes/on (case-insensitive)."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in _TRUTHY
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+# ---- Forge Studio: locality + local resource budgets ----
+#
+# Forge Studio is local-first and free by default. Cloud executors (claude_code,
+# the Anthropic batch endpoint, any API-key path) are gated behind an explicit
+# opt-in so the default path never dials out (guardrail G-LOC-1/G-LOC-2). The
+# module-level constants are import-time snapshots for cheap reads; the
+# ``*()`` helpers re-read the environment live so callers (and tests) see
+# changes without reimporting.
+CLOUD_ENABLED = _env_bool("FORGE_CLOUD_ENABLED", False)
+
+# Model-pool RAM budget (GB). On a 48 GB Apple Silicon machine the default
+# leaves ~12 GB for the OS, the daemon, and (later) ComfyUI (guardrail
+# G-RAM-1). The pool evicts LRU non-pinned models before exceeding this.
+LOCAL_RAM_BUDGET_GB = _env_float("FORGE_LOCAL_RAM_BUDGET_GB", 36.0)
+
+# Disk headroom (GB) that ``forge models pull`` must preserve. It refuses a
+# download that would leave less than this free (guardrail G-RAM-2).
+MODEL_DISK_HEADROOM_GB = _env_float("FORGE_MODEL_DISK_HEADROOM_GB", 10.0)
+
+
+def cloud_enabled() -> bool:
+    """True only when the user has explicitly opted into cloud models.
+
+    Every cloud executor selection routes through this. Default is False so a
+    fresh install makes zero outbound inference calls.
+    """
+    return _env_bool("FORGE_CLOUD_ENABLED", False)
+
+
+def local_ram_budget_gb() -> float:
+    """Live read of the model-pool RAM budget in GB."""
+    return _env_float("FORGE_LOCAL_RAM_BUDGET_GB", 36.0)
+
+
+def model_disk_headroom_gb() -> float:
+    """Live read of the disk headroom (GB) preserved by ``forge models pull``."""
+    return _env_float("FORGE_MODEL_DISK_HEADROOM_GB", 10.0)
+
+
 # ---- Ollama ----
 # Ollama is Forge's primary local-model backend. Runs on the user's machine,
 # free, fast on Apple Silicon. Set OLLAMA_BASE_URL if Ollama is on a remote

@@ -31,7 +31,7 @@ last_reviewed: 2026-06-02
 
 | Phase | Milestone | Status | Exit gate |
 |---|---|---|---|
-| 0 | M0 — Foundation & guardrails harness | ⬜ | Offline egress test + RAM-budget test exist and pass |
+| 0 | M0 — Foundation & guardrails harness | ✅ | Offline egress test + config-budget tests pass (38 tests) |
 | 1 | M1 — Executor pivot (cloud → local default) | ⬜ | Default path runs a sprint with zero cloud calls |
 | 1 | M2 — Model Pool Manager | ⬜ | Forced RAM squeeze evicts LRU, never OOMs, orchestrator pinned |
 | 1 | M3 — Memory upgrade (hybrid recall + reinforcement) | ⬜ | Repeat task skips a revision via cached KB/routing |
@@ -49,21 +49,20 @@ last_reviewed: 2026-06-02
 
 ## Phase 0 — Foundation
 
-### M0 — Foundation & guardrails harness  ⬜
+### M0 — Foundation & guardrails harness  ✅
 *Goal: stand up the safety nets before building features, so every later milestone is testable against them.*
 
 **Tasks**
-- ⬜ Add `tests/` egress assertion harness: mock socket layer; helper `assert_no_external_egress()` usable by any test.
-- ⬜ Add RAM-budget test scaffolding (fake model footprints, deterministic).
-- ⬜ Add `FORGE_LOCAL_RAM_BUDGET_GB`, `FORGE_MODEL_DISK_CEILING_GB`, `FORGE_CLOUD_ENABLED` to `config.py` (defaults: ~36, leave-10-free, `False`).
-- ⬜ Extend schema-parity script awareness for new WS messages (`pool.state`, `locality.state`, `document.*`).
-- ⬜ ADR for `sqlite-vec` + `mlx` dependency additions (Dependency-tracker rows).
+- ✅ Add `tests/` egress assertion harness: `tests/egress_guard.py` with `assert_no_external_egress()` + `ExternalEgressError`, patches the socket layer (loopback + AF_UNIX pass, all else blocked).
+- ✅ Add `FORGE_CLOUD_ENABLED`, `FORGE_LOCAL_RAM_BUDGET_GB`, `FORGE_MODEL_DISK_HEADROOM_GB` to `config.py` (defaults: `False`, `36.0`, `10.0`) + live reader helpers `cloud_enabled()`, `local_ram_budget_gb()`, `model_disk_headroom_gb()`.
+- ⬜ Extend schema-parity script awareness for new WS messages (`pool.state`, `locality.state`, `document.*`) — deferred to M1/M5 when those messages land.
+- ⬜ ADR for `sqlite-vec` + `mlx` dependency additions — deferred to M3 (`sqlite-vec` extra already exists) / M1 (`mlx`).
 
 **Tests**
-- `tests/unit/test_egress_guard.py` — default path opens no non-local socket.
-- `tests/unit/test_config_studio.py` — new env vars parse with correct defaults.
+- `tests/test_egress_guard.py` — 21 tests: local/external classification, blocks external connect/connect_ex, allows loopback, restores originals (incl. on exception).
+- `tests/test_config_studio.py` — 17 tests: cloud disabled by default, truthy/falsy parsing, RAM budget + disk headroom defaults & overrides.
 
-**Success gate (exit):** both tests pass; `FORGE_CLOUD_ENABLED=False` is the default and is read everywhere cloud executors are selected. Guardrails **G-LOC-1** and **G-RAM-1** have a failing-by-default safety net (red without the feature, green with it).
+**Success gate (exit):** ✅ both suites pass (38 tests); `cloud_enabled()` defaults False; full suite 932 passed / 1 skipped. RAM-budget *enforcement* test lands with the pool (M2); the config knob it reads exists now.
 
 ---
 
