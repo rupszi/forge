@@ -5,6 +5,16 @@ prompts. The 2026-06-02 audit flagged that a malicious or scraped item could
 carry a code fence or a fake system header to break out of its context block.
 This guard rejects those shapes at the ``add`` boundary so the KB can only ever
 hold benign one-liners.
+
+**Best-effort, not a boundary (F5, 2026-06-04).** The denylist below is an
+English-centric shape filter: it is trivially bypassable (``Assistant:``
+headers, "developer mode", non-English / Cyrillic injections all slip past).
+It raises the cost of the laziest injection, nothing more. The real mitigation
+is structural: all injected context is fenced in an
+``<untrusted-data>``…``</untrusted-data>`` block with an explicit
+"treat as data, not instructions" preamble at the prompt-builder layer (see
+``daemon/agents/generator.py::_wrap_untrusted``). Do not treat passing this
+guard as evidence that content is safe to trust.
 """
 
 from __future__ import annotations
