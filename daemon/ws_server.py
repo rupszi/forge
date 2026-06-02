@@ -353,8 +353,14 @@ async def _handle_message_inner(
     return {"type": "error", "error": f"Unknown message type: {msg_type}"}
 
 
-async def _handler(ws, path, db: ForgeDB, budget: BudgetController):
-    """Handle a WebSocket connection."""
+async def _handler(ws, db: ForgeDB, budget: BudgetController):
+    """Handle a WebSocket connection.
+
+    Single-argument handler signature for the modern ``websockets`` asyncio
+    API (>=14): ``serve()`` calls the handler with just the connection. The
+    request path (unused here) is available as ``ws.request.path`` if ever
+    needed.
+    """
     # Sprint 9 / Layer 10: cross-site WebSocket hijack defense. Reject
     # any handshake whose Origin isn't a localhost variant. Non-browser
     # clients (CLI / TUI) don't send Origin so they pass through.
@@ -409,7 +415,9 @@ async def start_server(
     if shutdown_event is None:
         shutdown_event = asyncio.Event()
 
-    handler = lambda ws, path: _handler(ws, path, db, budget)
+    async def handler(ws):
+        await _handler(ws, db, budget)
+
     server = await websockets.serve(handler, WS_HOST, WS_PORT)
     logger.info("WebSocket server running on ws://%s:%d", WS_HOST, WS_PORT)
 
