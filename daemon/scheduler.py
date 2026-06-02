@@ -289,6 +289,29 @@ async def execute_sprint(
     except Exception as e:  # never let scratchpad I/O break a sprint
         _silent(__name__, e)
 
+    # Auto-compaction: when the assembled memory block (KB + attachments +
+    # scratchpad) gets large, summarize it with a local model instead of
+    # letting the generator hard-truncate it. Gated on size, so small contexts
+    # (and the test path) never invoke a model.
+    from .compaction import (
+        MEMORY_CONTEXT_BUDGET_TOKENS,
+        compact_text,
+        estimate_tokens,
+        ollama_summarizer,
+        should_compact,
+    )
+    from .config import auto_compact_enabled
+
+    if (
+        auto_compact_enabled()
+        and memory
+        and should_compact(estimate_tokens(memory), MEMORY_CONTEXT_BUDGET_TOKENS, threshold=1.0)
+    ):
+        try:
+            memory = await compact_text(memory, MEMORY_CONTEXT_BUDGET_TOKENS, ollama_summarizer)
+        except Exception as e:
+            _silent(__name__, e)
+
     sprint_start = time.time()
 
     def _reinforce(completed: bool) -> None:

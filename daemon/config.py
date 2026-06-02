@@ -60,6 +60,12 @@ def cloud_enabled() -> bool:
     return _env_bool("FORGE_CLOUD_ENABLED", False)
 
 
+def auto_compact_enabled() -> bool:
+    """Whether the scheduler summarizes (vs hard-truncates) oversized memory
+    context. Default on; set ``FORGE_AUTO_COMPACT=0`` to disable."""
+    return _env_bool("FORGE_AUTO_COMPACT", True)
+
+
 def local_ram_budget_gb() -> float:
     """Live read of the model-pool RAM budget in GB."""
     return _env_float("FORGE_LOCAL_RAM_BUDGET_GB", 36.0)
