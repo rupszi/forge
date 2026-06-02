@@ -5,6 +5,8 @@ Each test would FAIL against the pre-fix code. Grouped by finding id.
 
 from __future__ import annotations
 
+import pytest
+
 # ---- F3: scratchpad scoped per (project, session) ----
 
 
@@ -59,3 +61,81 @@ class TestScratchpadScoping:
 
         src = inspect.getsource(scheduler.execute_sprint)
         assert "_default_mem_tool(ctx.path, session_id)" in src
+
+
+# ---- F4: FORGE_REDACT_PROMPTS scrubs the egress prompt ----
+
+_FAKE_KEY = "sk-ant-api03-" + "A" * 92
+
+
+def _local_sprint(desc: str):
+    from daemon.config import LOCAL_CODE_MODEL
+    from daemon.models import SprintContract
+
+    return SprintContract(
+        id="s1",
+        session_id="x",
+        description=desc,
+        done_criteria=["c1"],
+        assigned_model=LOCAL_CODE_MODEL,
+    )
+
+
+class TestPromptRedaction:
+    @pytest.mark.asyncio
+    async def test_generator_redacts_prompt_when_flag_on(self, monkeypatch):
+        monkeypatch.setenv("FORGE_REDACT_PROMPTS", "1")
+        from daemon.agents import generator
+        from daemon.executors import ollama as oll
+        from daemon.models import ExecutionResult
+
+        captured = {}
+
+        async def fake_exec(prompt, model=None, **k):
+            captured["prompt"] = prompt
+            return ExecutionResult(success=True, output="ok")
+
+        monkeypatch.setattr(oll, "execute", fake_exec)
+        await generator.generate(_local_sprint("task"), memory_context=f"leaked: {_FAKE_KEY}")
+        assert _FAKE_KEY not in captured["prompt"]
+        assert "[REDACTED:ANTHROPIC_KEY]" in captured["prompt"]
+
+    @pytest.mark.asyncio
+    async def test_generator_leaves_prompt_intact_when_flag_off(self, monkeypatch):
+        monkeypatch.delenv("FORGE_REDACT_PROMPTS", raising=False)
+        from daemon.agents import generator
+        from daemon.executors import ollama as oll
+        from daemon.models import ExecutionResult
+
+        captured = {}
+
+        async def fake_exec(prompt, model=None, **k):
+            captured["prompt"] = prompt
+            return ExecutionResult(success=True, output="ok")
+
+        monkeypatch.setattr(oll, "execute", fake_exec)
+        await generator.generate(_local_sprint("task"), memory_context=f"leaked: {_FAKE_KEY}")
+        # Off by default: the secret is sent unchanged (documented behavior).
+        assert _FAKE_KEY in captured["prompt"]
+        assert "[REDACTED" not in captured["prompt"]
+
+    @pytest.mark.asyncio
+    async def test_evaluator_redacts_diff_in_prompt_when_flag_on(self, monkeypatch):
+        monkeypatch.setenv("FORGE_REDACT_PROMPTS", "1")
+        monkeypatch.delenv("FORGE_CLOUD_ENABLED", raising=False)
+        from daemon.agents import evaluator
+        from daemon.executors import ollama as oll
+        from daemon.models import ExecutionResult, ProjectContext
+
+        captured = {}
+
+        async def fake_exec(prompt, model=None, **k):
+            captured["prompt"] = prompt
+            return ExecutionResult(success=True, output="PASS: c1 — ok\nAPPROVED")
+
+        monkeypatch.setattr(oll, "execute", fake_exec)
+        sprint = _local_sprint("task")
+        ctx = ProjectContext(path="/tmp/x")
+        await evaluator.evaluate(sprint, diff=f"+ token = {_FAKE_KEY}", ctx=ctx)
+        assert _FAKE_KEY not in captured["prompt"]
+        assert "[REDACTED:ANTHROPIC_KEY]" in captured["prompt"]

@@ -56,13 +56,21 @@ async def _dispatch_eval(prompt: str, eval_model: str):
     rather than dialing out (G-LOC-1/2).
     """
     from .. import routing
-    from ..config import cloud_enabled
+    from ..config import cloud_enabled, redact_prompts_enabled
     from ..executors import (
         claude_code as cc,
         mlx as mx,
         ollama as oll,
         openai_compatible as oc,
     )
+
+    # Prompt-egress redaction (F4 / ADR-017): the evaluator prompt embeds the
+    # generator's diff, the likeliest place a committed secret would ride out.
+    # Opt-in; off by default so prompts are unchanged.
+    if redact_prompts_enabled():
+        from ..redact import redact
+
+        prompt = redact(prompt)
 
     executor_str = routing.select_executor(eval_model)
     if routing.is_cloud_executor(executor_str) and not cloud_enabled():

@@ -238,6 +238,17 @@ async def generate(
         mode=mode,
     )
 
+    # Prompt-egress redaction (F4 / ADR-017): opt-in scrub of credential shapes
+    # from the fully-assembled prompt before it reaches any executor. Off by
+    # default so legitimate prompts are byte-identical; on, a stray secret in
+    # the diff/context is replaced with a labelled marker.
+    from ..config import redact_prompts_enabled
+
+    if redact_prompts_enabled():
+        from ..redact import redact
+
+        prompt = redact(prompt)
+
     executor = _select_executor(sprint)
 
     # Each executor has the same async ``execute`` interface but slightly

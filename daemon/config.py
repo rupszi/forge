@@ -60,6 +60,19 @@ def cloud_enabled() -> bool:
     return _env_bool("FORGE_CLOUD_ENABLED", False)
 
 
+def redact_prompts_enabled() -> bool:
+    """Whether to scrub credentials from the assembled prompt before it leaves
+    for the model (generator + evaluator egress).
+
+    Off by default: the user may legitimately want to send secrets they're
+    actively debugging, and aggressive prompt redaction can mangle code. When
+    ``FORGE_REDACT_PROMPTS=1`` the prompt is run through ``redact.redact`` at
+    the egress boundary so a stray ``.env`` in a diff doesn't reach the model
+    API (ADR-017 / docs ROADMAP Layer 13).
+    """
+    return _env_bool("FORGE_REDACT_PROMPTS", False)
+
+
 def auto_compact_enabled() -> bool:
     """Whether the scheduler summarizes (vs hard-truncates) oversized memory
     context. Default on; set ``FORGE_AUTO_COMPACT=0`` to disable."""
