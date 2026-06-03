@@ -131,6 +131,7 @@ async def _generate_with_pool(
     revision_feedback: str,
     mode: str,
     pool: ModelPool | None,
+    num_ctx: int | None = None,
 ) -> ExecutionResult:
     """Run the generator, optionally holding a model-pool lease for its model."""
 
@@ -142,6 +143,7 @@ async def _generate_with_pool(
             repomap=repomap,
             revision_feedback=revision_feedback,
             mode=mode,
+            num_ctx=num_ctx,
         )
 
     if pool is None:
@@ -163,6 +165,7 @@ async def _run_one_attempt(
     *,
     mode: str = "auto",
     pool: ModelPool | None = None,
+    num_ctx: int | None = None,
 ) -> tuple[ExecutionResult, EvaluatorResult]:
     """Run one generate→evaluate cycle.
 
@@ -175,7 +178,7 @@ async def _run_one_attempt(
     serialized and LRU-evicted rather than overcommitting memory.
     """
     gen_result = await _generate_with_pool(
-        sprint, memory, wt_path, repomap, revision_feedback, mode, pool
+        sprint, memory, wt_path, repomap, revision_feedback, mode, pool, num_ctx
     )
 
     if not gen_result.success:
@@ -317,6 +320,15 @@ async def execute_sprint(
 
     sprint_start = time.time()
 
+    # Snapshot the context window ONCE for this sprint's (now-finalized) model
+    # (F13). context_window._setting / _kv_setting are process globals the UI
+    # can flip mid-session; resolving here freezes the value so a flip can't
+    # change the window of a sprint already in flight. Threaded to every attempt
+    # (normal, revision, Self-Consistency) for this same sprint+model.
+    from .context_window import resolve_num_ctx as _resolve_num_ctx
+
+    sprint_num_ctx = _resolve_num_ctx(sprint.assigned_model)
+
     def _reinforce(completed: bool) -> None:
         """Confidence reinforcement (M3): nudge the KB items that were injected
         into this sprint's context up (approved) or down (failed)."""
@@ -342,7 +354,14 @@ async def execute_sprint(
 
         async def _attempt(_sprint, _i):
             return await _run_one_attempt(
-                _sprint, ctx, wt_path, memory, repomap, mode=current_mode, pool=pool
+                _sprint,
+                ctx,
+                wt_path,
+                memory,
+                repomap,
+                mode=current_mode,
+                pool=pool,
+                num_ctx=sprint_num_ctx,
             )
 
         consistency_result = await recovery.self_consistent_run(sprint, n=3, run_attempt=_attempt)
@@ -388,7 +407,15 @@ async def execute_sprint(
             )
 
         gen_result, eval_result = await _run_one_attempt(
-            sprint, ctx, wt_path, memory, repomap, revision_feedback, mode=current_mode, pool=pool
+            sprint,
+            ctx,
+            wt_path,
+            memory,
+            repomap,
+            revision_feedback,
+            mode=current_mode,
+            pool=pool,
+            num_ctx=sprint_num_ctx,
         )
         budget.record_spend(gen_result.cost_usd + eval_result.cost_usd)
         last_gen_result = gen_result

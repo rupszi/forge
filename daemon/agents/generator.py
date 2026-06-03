@@ -222,6 +222,7 @@ async def generate(
     repomap: str = "",
     revision_feedback: str = "",
     mode: str = "auto",
+    num_ctx: int | None = None,
 ) -> ExecutionResult:
     """Execute a sprint in a worktree. Do NOT self-evaluate.
 
@@ -282,11 +283,20 @@ async def generate(
         # Set the context window (num_ctx) per the user's setting, clamped to
         # the model's max and a RAM-safe ceiling. Without this, Ollama uses its
         # small default window regardless of the model's capability.
-        from ..context_window import resolve_num_ctx
+        #
+        # ``num_ctx`` is normally snapshotted once at the top of the sprint
+        # (scheduler) so a mid-sprint UI flip of the context preference can't
+        # change the window in flight (F13). Fall back to a live resolve only
+        # when no snapshot was threaded (e.g. direct unit-test calls).
+        effective_num_ctx = num_ctx
+        if effective_num_ctx is None:
+            from ..context_window import resolve_num_ctx
+
+            effective_num_ctx = resolve_num_ctx(sprint.assigned_model)
 
         return await executor.execute(
             prompt,
             model=sprint.assigned_model,
-            num_ctx=resolve_num_ctx(sprint.assigned_model),
+            num_ctx=effective_num_ctx,
         )
     return await executor.execute(prompt, model=sprint.assigned_model)

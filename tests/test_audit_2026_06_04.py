@@ -290,3 +290,67 @@ class TestByteBudgets:
         out = tool.context(budget_tokens=budget_tokens)
         assert out
         assert len(out) <= budget_tokens * 4
+
+
+# ---- F13: num_ctx snapshotted per sprint, not read live ----
+
+
+class TestNumCtxSnapshot:
+    @pytest.mark.asyncio
+    async def test_generator_uses_snapshot_over_live_setting(self, monkeypatch):
+        from daemon import context_window
+        from daemon.agents import generator
+        from daemon.executors import ollama as oll
+        from daemon.models import ExecutionResult
+
+        original = context_window.get_setting()
+        try:
+            captured = {}
+
+            async def fake_exec(prompt, model=None, num_ctx=None, **k):
+                captured["num_ctx"] = num_ctx
+                return ExecutionResult(success=True, output="ok")
+
+            monkeypatch.setattr(oll, "execute", fake_exec)
+            # The UI flips the live setting; the in-flight sprint must ignore it.
+            context_window.set_setting(8192)
+            await generator.generate(_local_sprint("task"), num_ctx=16384)
+            assert captured["num_ctx"] == 16384
+        finally:
+            context_window.set_setting(original)
+
+    @pytest.mark.asyncio
+    async def test_generator_live_resolves_without_snapshot(self, monkeypatch):
+        from daemon import context_window
+        from daemon.agents import generator
+        from daemon.executors import ollama as oll
+        from daemon.models import ExecutionResult
+
+        original = context_window.get_setting()
+        try:
+            captured = {}
+
+            async def fake_exec(prompt, model=None, num_ctx=None, **k):
+                captured["num_ctx"] = num_ctx
+                return ExecutionResult(success=True, output="ok")
+
+            monkeypatch.setattr(oll, "execute", fake_exec)
+            context_window.set_setting(4096)
+            await generator.generate(_local_sprint("task"))  # no snapshot
+            low = captured["num_ctx"]
+            context_window.set_setting(131072)
+            await generator.generate(_local_sprint("task"))
+            high = captured["num_ctx"]
+            assert low == 4096
+            assert high >= low  # live setting feeds through when not snapshotted
+        finally:
+            context_window.set_setting(original)
+
+    def test_scheduler_snapshots_and_threads_num_ctx(self):
+        import inspect
+
+        import daemon.scheduler as scheduler
+
+        src = inspect.getsource(scheduler.execute_sprint)
+        assert "sprint_num_ctx = _resolve_num_ctx(sprint.assigned_model)" in src
+        assert "num_ctx=sprint_num_ctx" in src
