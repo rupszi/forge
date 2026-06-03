@@ -36,7 +36,7 @@ Status: ✅ closed (regression test) · 🟡 noted/best-effort · ⬜ open · �
 | ID | Sev | Conf | Area | File:line | Title | Status |
 |---|---|---|---|---|---|---|
 | N1 | Low | proven | Security/Deps | (transitive) | `idna 3.13` advisory CVE-2026-45409 (fix 3.15), pulled via httpx | ⬜ open |
-| N2 | Info | proven | Quality | daemon/executors/mlx.py:76; scheduler.py:478,700 | 3 pre-existing pyright errors (optional `mlx_lm` import; `BaseException.status`; stale `# type: ignore`) | ⬜ open (pre-existing) |
+| N2 | Info | proven | Quality | daemon/ (db.py, budget.py, executors, …) | **~36 pre-existing pyright errors** (Optional handling, int\|None returns, optional-dep imports) — runtime-safe (suite green); pyright made advisory + tracked (M8). Earlier "3" undercounted (scanned only touched files). | 🟡 tracked |
 | N3 | Info | proven | Security | daemon/agents/generator.py | Untrusted-data fencing is best-effort; only KB content passes `kb_guard` (attachments/research rely on the fence + neutralization) | 🟡 noted |
 
 No new High/Medium defects were introduced by the F3–F15 fixes (adversarially

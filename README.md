@@ -6,6 +6,13 @@
 [![No telemetry](https://img.shields.io/badge/telemetry-none-success.svg)](docs/DECISIONS.md)
 [![Tests: passing](https://img.shields.io/badge/tests-passing-success.svg)]()
 
+> **Status: v0.1, local-first.** Runs as a **local web dashboard in your browser**
+> (`forge serve`) — OS-agnostic, no native app or installer to build. The
+> SWE-bench thesis gate (the project's own go/no-go) is **unrun**: run it
+> yourself and report results (see [eval/swebench/](eval/swebench/README.md)).
+> A native desktop shell (Tauri) and a few UI panels are **WIP / open for
+> contributors**. This is an honest pre-release, not finished-product polish.
+
 > **Forge is the harness that doesn't trust its own work.**
 
 The generator runs on one model. The evaluator runs on a **different model family** — automatically. Each `done_criterion` from the planner gets graded independently with PASS/FAIL + evidence. Local SQLite knowledge base compounds across sessions. **MIT, no telemetry, no signup, runs without an API key.**

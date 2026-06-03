@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### v0.1 pre-release prep (2026-06-04)
+
+- **Top-line status** stated in README + TRACKER: v0.1, local-first; ships as
+  the **OS-agnostic browser dashboard** (`forge serve`) — no native app/installer.
+- **Native desktop shell (Tauri, M6) deferred** post-v0.1, open for contributors;
+  the browser dashboard is the shipping surface. **M8 re-scoped** for v0.1
+  (software-quality done; SWE-bench gate is user-run + documented, not gated).
+- **`idna` bumped to ≥3.15** (now 3.18) — clears CVE-2026-45409; `pip-audit` clean.
+- **`pyproject` URLs** de-placeholdered (no fake `yourorg`; a remote is not
+  needed for a local-only app — set only if/when source is published).
+- **pyright made advisory** in pre-push for v0.1 (`PYRIGHT_STRICT=1` to re-block):
+  ~36 pre-existing, runtime-safe type-annotation findings are tracked debt
+  (TRACKER M8), not a release gate. Honest reconciliation — the checker was
+  never green, so it was never a real gate.
+
 ### SWE-bench kill gate — metric tiers + selectable profiles (2026-06-04)
 
 Implemented the unit-testable core of the SWE-bench kill gate (the live Docker

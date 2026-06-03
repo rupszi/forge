@@ -78,11 +78,14 @@ dev = [
 [project.scripts]
 forge = "daemon.cli:main"
 
-[project.urls]
-Homepage = "https://github.com/yourorg/forge"
-Repository = "https://github.com/yourorg/forge"
-Issues = "https://github.com/yourorg/forge/issues"
-Changelog = "https://github.com/yourorg/forge/blob/main/CHANGELOG.md"
+# Forge is a local-only app — it needs no git remote to run. These URLs are
+# packaging metadata only; fill them in (and set a remote) IF/WHEN the source
+# is published to a host. Left unset rather than pointing at a placeholder org.
+# [project.urls]
+# Homepage = "https://github.com/<org>/forge"
+# Repository = "https://github.com/<org>/forge"
+# Issues = "https://github.com/<org>/forge/issues"
+# Changelog = "https://github.com/<org>/forge/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
