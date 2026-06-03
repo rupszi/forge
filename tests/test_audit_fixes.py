@@ -29,20 +29,27 @@ class TestPathGuardCaseNormalization:
         assert _validate_init_path("/etc") is False
         assert _validate_init_path("/var/root") is False
 
-    def test_case_variant_of_cwd_allowed_on_insensitive_fs(self):
-        # On macOS/Windows (case-insensitive), an upper/lower variant of the cwd
-        # must still validate. normcase makes the comparison case-correct.
+    def test_case_variant_of_cwd_matches_normcase_semantics(self):
+        # The guard uses os.path.normcase before comparing. Whether a
+        # swapped-case variant of the cwd validates is therefore fully
+        # determined by the platform's normcase: case-folding (Windows) → the
+        # variant is the SAME dir and must be allowed; identity (POSIX) → the
+        # variant is a DIFFERENT path and must be rejected. Either way the real
+        # cwd must always validate. No "either outcome is fine" fudge.
         from daemon.ws_server import _validate_init_path
 
         cwd = os.getcwd()
         swapped = cwd.swapcase()
         result = _validate_init_path(swapped)
-        # On case-insensitive filesystems this is the same dir → allowed.
-        # On case-sensitive (Linux) it's genuinely a different path → rejected.
-        if os.path.normcase("A") == os.path.normcase("a"):
-            assert result is True
+
+        case_folding_fs = os.path.normcase("A") == os.path.normcase("a")
+        if case_folding_fs:
+            assert result is True, "case-folding normcase must treat the variant as the same dir"
         else:
-            assert result in (True, False)  # behavior is correct either way
+            assert result is False, "POSIX normcase: a swapped-case path is a different dir"
+
+        # Invariant regardless of platform: the genuine cwd always validates.
+        assert _validate_init_path(cwd) is True
 
 
 class TestCrossFamilyInvariant:

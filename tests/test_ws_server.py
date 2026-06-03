@@ -19,6 +19,7 @@ from daemon.ws_server import (
     _MAX_MESSAGE_BYTES,
     _RATE_LIMIT_MAX_MSG,
     _client_msg_times,
+    _handle_message_inner,
     _message_semaphore,
     _rate_limit_check,
     _validate_init_path,
@@ -102,25 +103,60 @@ def test_validate_init_path_normalizes_traversal():
 # ---- Size cap (constant assertion) ----
 
 
-def test_message_size_cap_is_one_mb():
-    """Sanity: the cap is the documented value, not silently inflated."""
-    assert _MAX_MESSAGE_BYTES == 1_000_000
+@pytest.mark.asyncio
+async def test_oversized_message_rejected_before_parse():
+    """A frame over the cap is rejected by the size gate BEFORE json.loads —
+    so it returns the cap error, not a JSON-parse error. This exercises the
+    guard's behavior, not just the constant's value."""
+    _client_msg_times.pop(id(None), None)
+    oversized = "x" * (_MAX_MESSAGE_BYTES + 1)  # invalid JSON on purpose
+    resp = await _handle_message_inner(None, oversized, None, None, None)
+    assert resp["type"] == "error"
+    assert "cap" in resp["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_undersized_invalid_message_passes_size_gate():
+    """A small (but invalid-JSON) frame is NOT rejected by the size gate — it
+    flows past it to the JSON parser. Proves the cap is the discriminator."""
+    _client_msg_times.pop(id(None), None)
+    resp = await _handle_message_inner(None, "not json", None, None, None)
+    assert resp["type"] == "error"
+    assert "cap" not in resp["error"].lower()
+    assert "json" in resp["error"].lower()
 
 
 # ---- Task 2.3: handler semaphore ----
 
 
-def test_message_handler_semaphore_caps_at_documented_limit():
-    """The semaphore's initial value matches the documented constant.
+@pytest.mark.asyncio
+async def test_message_handler_semaphore_throttles_beyond_limit():
+    """The semaphore admits exactly _MAX_CONCURRENT_HANDLERS holders; the next
+    acquire blocks until one releases. Exercises the throttle, not the constant."""
+    sem = _message_semaphore
+    limit = _MAX_CONCURRENT_HANDLERS
+    held = 0
+    waiter = None
+    try:
+        for _ in range(limit):
+            await sem.acquire()
+            held += 1
+        assert sem.locked()  # at capacity → no further immediate admission
 
-    Real concurrency-bound testing (spawning N>limit handlers and observing
-    the throttle) is integration territory — for the unit guard, asserting
-    the constant + the underlying semaphore value matches is enough.
-    """
-    assert _MAX_CONCURRENT_HANDLERS == 10
-    # Semaphore._value is private but stable across asyncio versions; this
-    # is a sanity check, not a public-API assertion.
-    assert _message_semaphore._value == _MAX_CONCURRENT_HANDLERS
+        waiter = asyncio.ensure_future(sem.acquire())
+        await asyncio.sleep(0)
+        assert not waiter.done(), "acquire beyond the cap must block"
+
+        sem.release()  # free one slot
+        held -= 1
+        await asyncio.wait_for(waiter, timeout=1)  # waiter now admitted
+        held += 1
+        waiter = None
+    finally:
+        if waiter is not None:
+            waiter.cancel()
+        for _ in range(held):
+            sem.release()
 
 
 # ---- Graceful shutdown (Task 1.7) ----

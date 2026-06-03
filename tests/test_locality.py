@@ -32,14 +32,23 @@ class TestModelsCli:
         assert "Default local model lineup" in out
         assert "Free disk" in out
 
-    def test_models_pull_dry_run(self, capsys):
+    def test_models_pull_dry_run(self, capsys, monkeypatch):
         from types import SimpleNamespace
 
-        from daemon import cli
+        from daemon import cli, model_setup
+
+        # Deterministic: ample free disk so the plan is accepted and the dry-run
+        # branch (not the disk-refusal branch) is the one exercised.
+        monkeypatch.setattr(model_setup, "free_disk_gb", lambda _p: 100_000.0)
+
+        # Hard guard: a dry run must NEVER actually pull a model.
+        def _must_not_pull(name):
+            raise AssertionError(f"dry run pulled {name!r}")
+
+        monkeypatch.setattr(cli, "_ollama_pull", _must_not_pull)
 
         rc = cli.cmd_models(SimpleNamespace(action="pull", dry_run=True))
         out = capsys.readouterr().out
-        # Either a dry-run plan printed (rc 0) or a disk refusal (rc 1) — both
-        # are honest outcomes; neither should pull anything.
-        assert rc in (0, 1)
+        assert rc == 0
         assert "Plan:" in out
+        assert "dry run — nothing pulled" in out
