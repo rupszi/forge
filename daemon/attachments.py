@@ -68,6 +68,7 @@ class AttachmentStore:
         budget_chars = budget_tokens * 4
         out = ["## Attached files (user-provided context)"]
         used = len(out[0])
+        suffix = "\n…(truncated)"
         for att in self._items.values():
             header = f"\n\n### {att.name} ({att.path})\n"
             if used + len(header) >= budget_chars:
@@ -75,7 +76,13 @@ class AttachmentStore:
             remaining = budget_chars - used - len(header)
             body = att.content
             if len(body) > remaining:
-                body = body[: max(0, remaining)] + "\n…(truncated)"
+                # Reserve room for the truncation suffix so header+body+suffix
+                # stays within the byte budget (F12). No room for even the
+                # suffix → stop here rather than overshoot.
+                keep = remaining - len(suffix)
+                if keep <= 0:
+                    break
+                body = body[:keep] + suffix
             out.append(header + body)
             used += len(header) + len(body)
             if used >= budget_chars:

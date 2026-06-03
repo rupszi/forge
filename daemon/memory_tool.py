@@ -116,6 +116,7 @@ class MemoryTool:
         if not files:
             return ""
         budget_chars = budget_tokens * 4
+        suffix = "\n…(truncated)"
         out = ["## Working memory (session scratchpad)"]
         used = len(out[0])
         for f in files:
@@ -126,7 +127,12 @@ class MemoryTool:
             body = f.read_text(encoding="utf-8", errors="replace")
             remaining = budget_chars - used - len(header)
             if len(body) > remaining:
-                body = body[: max(0, remaining)] + "\n…(truncated)"
+                # Reserve room for the suffix so header+body+suffix stays within
+                # the byte budget (F12); stop if there isn't even room for it.
+                keep = remaining - len(suffix)
+                if keep <= 0:
+                    break
+                body = body[:keep] + suffix
             out.append(header + body)
             used += len(header) + len(body)
         return "".join(out)

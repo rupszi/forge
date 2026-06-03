@@ -31,8 +31,15 @@ def should_compact(used: int, cap: int, threshold: float = 0.8) -> bool:
     return cap > 0 and used >= cap * threshold
 
 
+_TRUNCATION_SUFFIX = "\n…(truncated)"
+
+
 def _truncate(text: str, target_tokens: int) -> str:
-    return text[: max(0, target_tokens * 4)] + "\n…(truncated)"
+    # Reserve room for the suffix so the result stays within the byte budget
+    # (target_tokens × 4), rather than overshooting by len(suffix) (F12).
+    budget_chars = max(0, target_tokens * 4)
+    keep = max(0, budget_chars - len(_TRUNCATION_SUFFIX))
+    return text[:keep] + _TRUNCATION_SUFFIX
 
 
 async def compact_text(text: str, target_tokens: int, summarizer: Summarizer) -> str:

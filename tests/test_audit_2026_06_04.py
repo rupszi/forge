@@ -256,3 +256,37 @@ class TestMLXWeightCache:
         await mlx.execute("p", model="mlx:repo-a")
         assert loads["n"] == n_before + 1
         mlx.clear_cache()
+
+
+# ---- F12: context builders stay within their byte budget ----
+
+
+class TestByteBudgets:
+    def test_compaction_truncate_within_budget(self):
+        from daemon.compaction import _truncate
+
+        target_tokens = 10
+        out = _truncate("x" * 5000, target_tokens)
+        assert len(out) <= target_tokens * 4  # pre-fix: overshot by suffix len
+
+    def test_attachments_context_within_budget(self, tmp_path):
+        from daemon.attachments import AttachmentStore
+
+        store = AttachmentStore()
+        big = tmp_path / "big.txt"
+        big.write_text("y" * 10000)
+        store.add_path(str(big))
+        budget_tokens = 50
+        out = store.context(budget_tokens=budget_tokens)
+        assert out  # actually produced context
+        assert len(out) <= budget_tokens * 4
+
+    def test_memory_tool_context_within_budget(self, tmp_path):
+        from daemon.memory_tool import MemoryTool
+
+        tool = MemoryTool(str(tmp_path / "mem"))
+        tool.create("notes.md", "z" * 10000)
+        budget_tokens = 50
+        out = tool.context(budget_tokens=budget_tokens)
+        assert out
+        assert len(out) <= budget_tokens * 4
