@@ -1,5 +1,8 @@
 [build-system]
-requires = ["hatchling>=1.27"]
+# hatch-vcs is required at BUILD time because [tool.hatch.version].source = "vcs".
+# Without it, isolated PEP517 builds (uv lock / uv sync / pip install in a clean
+# env / python -m build) fail with "Unknown version source: vcs".
+requires = ["hatchling>=1.27", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"
 
 [project]
