@@ -208,6 +208,8 @@ No agent frameworks. No LangChain. No CrewAI. See [docs/DECISIONS.md ADR-011](do
 
 ## Documentation
 
+**Full index: [docs/README.md](docs/README.md)** — every doc, grouped (start-here · using · architecture · security · status · history · research).
+
 **Start here:**
 - **[docs/POSITIONING.md](docs/POSITIONING.md)** — what Forge is, what it isn't, OpenClaw / OpenHands / Cursor / Claude Code comparisons in one read
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** — what's shipped + what's open for contributors (every deferred feature has a contract + entry point + acceptance gates)
@@ -233,11 +235,13 @@ No agent frameworks. No LangChain. No CrewAI. See [docs/DECISIONS.md ADR-011](do
 
 ## Status
 
-Forge is currently **alpha**. The test suite is green (1100+ tests); lint + format clean. Phase 1 (foundation) and Phase 2 parity 5/10 (hooks / custom-slash / AGENTS.md / output-styles / refusal-templates) and Phase 4 layers 5 + 10 (Unicode sanitizer / WS Origin allow-list) are shipped. The first launchable release is `v0.1.0` targeting end of Phase 8 — gated on the SWE-bench kill criterion.
+**v0.1, local-first pre-release.** The test suite is green (**1210 tests**); ruff + schema-parity + docs-audit clean; `pip-audit` clean; UI builds. The 2026-06-04 audit closed every finding (see [docs/audits/](docs/audits/2026-06-04-forge-studio/REPORT.md)).
 
-What's shipped vs what's open for contributors lives in [docs/ROADMAP.md](docs/ROADMAP.md). Every deferred feature has a contract, an entry point, and acceptance gates — pick one, open a draft PR.
+Forge ships as the **OS-agnostic browser dashboard** (`forge serve`) — there is no native app or installer to build. A native desktop shell (Tauri) and a few UI panels are **WIP / open for contributors**. `pyright` is advisory for v0.1 (a tracked type-annotation backlog; the suite is green).
 
-Hard kill criterion: if Forge can't reach **≥30% on a 50-task SWE-bench Verified subset** using the open-weight stack by Phase 2 Week 8, the open-weight thesis fails and the project pivots or shuts down. See [docs/DECISIONS.md ADR-015](docs/DECISIONS.md).
+The central thesis is **not yet proven**: the SWE-bench kill gate is **unrun** (it needs Docker + GPU + local models). Run it on your own hardware and report — `forge bench --list-profiles`, then see [eval/swebench/](eval/swebench/README.md). What's shipped vs open for contributors lives in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/FORGE_STUDIO_TRACKER.md](docs/FORGE_STUDIO_TRACKER.md).
+
+Hard kill criterion: if Forge can't reach **≥30% on a 50-task SWE-bench Verified subset** with the open-weight stack, the open-weight thesis fails and the project pivots. See [docs/DECISIONS.md ADR-015](docs/DECISIONS.md).
 
 ## Contributing
 
