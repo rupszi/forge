@@ -82,8 +82,16 @@ _UNTRUSTED_CLOSE = "</untrusted-data>"
 
 
 def _wrap_untrusted(context: str) -> str:
-    """Fence injected context so an embedded prompt-injection reads as data."""
-    return f"{_UNTRUSTED_HEADER}\n{_UNTRUSTED_OPEN}\n{context}\n{_UNTRUSTED_CLOSE}"
+    """Fence injected context so an embedded prompt-injection reads as data.
+
+    Neutralizes any literal fence tags inside the content first — otherwise a
+    crafted KB/attachment item containing ``</untrusted-data>`` could close the
+    fence early and smuggle instructions after it (F5 hardening).
+    """
+    safe = context.replace(_UNTRUSTED_CLOSE, "<\\/untrusted-data>").replace(
+        _UNTRUSTED_OPEN, "<\\untrusted-data>"
+    )
+    return f"{_UNTRUSTED_HEADER}\n{_UNTRUSTED_OPEN}\n{safe}\n{_UNTRUSTED_CLOSE}"
 
 
 def _build_prompt(

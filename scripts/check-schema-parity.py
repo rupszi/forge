@@ -94,8 +94,8 @@ def model_todict_keys(text: str, cls_name: str) -> set[str]:
                             for k in stmt.value.keys:
                                 if not isinstance(k, ast.Constant) or not isinstance(k.value, str):
                                     raise SystemExit(
-                                        f"schema-parity: {cls_name}.to_dict has a "
-                                        "non-literal dict key; cannot verify parity"
+                                        f"schema-parity: {cls_name}.to_dict has a non-literal "
+                                        f"dict key; cannot verify parity"
                                     )
                                 keys.add(k.value)
                             return keys
