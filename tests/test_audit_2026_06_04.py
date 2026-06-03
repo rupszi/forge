@@ -354,3 +354,39 @@ class TestNumCtxSnapshot:
         src = inspect.getsource(scheduler.execute_sprint)
         assert "sprint_num_ctx = _resolve_num_ctx(sprint.assigned_model)" in src
         assert "num_ctx=sprint_num_ctx" in src
+
+
+# ---- F11: researcher cloud gate + clean error for unmapped executor ----
+
+
+class TestResearcherAndBatchRouting:
+    @pytest.mark.asyncio
+    async def test_web_search_raises_when_cloud_disabled(self, monkeypatch):
+        monkeypatch.delenv("FORGE_CLOUD_ENABLED", raising=False)
+        from daemon import routing
+        from daemon.agents.researcher import Researcher
+
+        r = Researcher(cache=None)
+        with pytest.raises(routing.CloudDisabledError):
+            await r._web_search("how to fix X")
+
+    def test_unmapped_executor_raises_clean_error_not_keyerror(self, monkeypatch):
+        monkeypatch.setenv("FORGE_CLOUD_ENABLED", "1")  # pass the cloud gate
+        from daemon import routing
+        from daemon.agents import generator
+
+        # Force routing to emit the unrouted "batch" string.
+        monkeypatch.setattr(routing, "select_executor", lambda model: "batch")
+        sprint = _local_sprint("task")
+
+        with pytest.raises(ValueError) as exc:
+            generator._select_executor(sprint)
+        # Clean, actionable message — not a bare KeyError.
+        assert "batch" in str(exc.value)
+        assert not isinstance(exc.value, KeyError)
+
+    def test_batch_still_recognized_as_cloud(self):
+        """Fail-closed: 'batch' stays classified as cloud so the gate fires."""
+        from daemon import routing
+
+        assert routing.is_cloud_executor("batch") is True

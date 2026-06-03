@@ -211,6 +211,18 @@ def _select_executor(sprint: SprintContract):
         )
         raise routing.CloudDisabledError(msg)
 
+    # ``batch`` is recognized as a cloud executor (fail-closed in the gate
+    # above) but is intentionally NOT wired into generator dispatch — it has no
+    # entry in _EXECUTOR_MAP. Surface a clean error instead of a bare KeyError
+    # if any executor string ever reaches here unmapped (F11).
+    if executor_str not in _EXECUTOR_MAP:
+        msg = (
+            f"executor {executor_str!r} (for model {model!r}) is not wired into "
+            "the generator. Assign a model that routes to a supported executor "
+            f"({', '.join(sorted(_EXECUTOR_MAP))})."
+        )
+        raise ValueError(msg)
+
     return _EXECUTOR_MAP[executor_str]
 
 

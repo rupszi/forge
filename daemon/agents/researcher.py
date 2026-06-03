@@ -35,7 +35,25 @@ class Researcher:
         return [error[:100]]
 
     async def _web_search(self, query: str) -> list[ResearchResult]:
-        """Search the web using Claude Code's search capability."""
+        """Search the web using Claude Code's search capability.
+
+        Web search routes through the cloud ``claude -p`` executor, so it is
+        gated behind the local-first cloud check (F11). With cloud disabled it
+        raises ``CloudDisabledError`` rather than dialing out silently — web
+        research is an experimental, cloud-only capability.
+        """
+        from .. import routing
+        from ..config import cloud_enabled
+
+        executor_str = routing.select_executor("sonnet")
+        if routing.is_cloud_executor(executor_str) and not cloud_enabled():
+            msg = (
+                "Researcher web search routes to the cloud executor "
+                f"{executor_str!r}, but FORGE_CLOUD_ENABLED is off. Web research "
+                "is experimental and cloud-only; enable cloud to use it."
+            )
+            raise routing.CloudDisabledError(msg)
+
         prompt = (
             f"Search the web for: {query}\n\n"
             f"Provide the most relevant result with:\n"
