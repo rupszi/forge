@@ -417,3 +417,52 @@ class TestGlobalSingletonIsolation:
 
         assert attachments.get_store().list() == []  # reset between tests
         assert context_window.get_setting() == "auto"
+
+
+# ---- F9: schema-parity gate exists and works ----
+
+
+def _load_parity_module():
+    import importlib.util
+    from pathlib import Path
+
+    p = Path(__file__).resolve().parent.parent / "scripts" / "check-schema-parity.py"
+    spec = importlib.util.spec_from_file_location("check_schema_parity", p)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class TestSchemaParityGate:
+    def test_current_tree_is_in_parity(self):
+        mod = _load_parity_module()
+        assert mod.main() == 0
+
+    def test_parsers_extract_fields(self):
+        mod = _load_parity_module()
+        ts = "export interface Foo {\n  a: string;\n  b?: number | null;\n  // c: skip\n}\n"
+        assert mod.ts_interface_fields(ts, "Foo") == {"a", "b"}
+        sql = (
+            "CREATE TABLE IF NOT EXISTS t (\n"
+            "  id TEXT PRIMARY KEY,\n"
+            "  name TEXT NOT NULL,\n"
+            "  PRIMARY KEY (id)\n"
+            ");"
+        )
+        assert mod.db_table_columns(sql, "t") == {"id", "name"}
+
+    def test_detects_ts_drift(self, tmp_path, monkeypatch):
+        """Point the gate at a types.ts missing a field models.py emits → fail."""
+        mod = _load_parity_module()
+        drifted = tmp_path / "types.ts"
+        drifted.write_text(
+            "export interface SprintContract {\n  id: string;\n}\n"
+            "export interface Session {\n  id: string;\n}\n"
+        )
+        monkeypatch.setattr(mod, "TYPES_TS", drifted)
+        assert mod.main() == 1
+
+    def test_skip_env_bypasses(self, monkeypatch):
+        mod = _load_parity_module()
+        monkeypatch.setenv("SKIP_SCHEMA_PARITY", "1")
+        assert mod.main() == 0

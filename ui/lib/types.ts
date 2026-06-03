@@ -11,6 +11,7 @@ export interface SprintContract {
   revision_count: number;
   error: string | null;
   estimated_tokens: number;
+  critical: boolean;
   created_at: string;
 }
 

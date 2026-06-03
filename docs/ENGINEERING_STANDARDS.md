@@ -53,13 +53,12 @@ The opinionated engineering bar for Forge. Every contribution adheres to these s
   .pre-commit-config.yaml  ← fast hooks (commit stage)
   .gitleaks.toml           ← secret-scan allowlist
   .gitignore
-src/
-  forge/                   ← THE package (rename from daemon/)
+daemon/                    ← THE package (flat layout; a src/forge/ rename is NOT planned for v0.1)
     agents/                ← planner, generator, evaluator, reviewer, researcher, classifier
-    executors/             ← claude_code, ollama, openai_compatible, batch
+    executors/             ← claude_code, ollama, openai_compatible, batch, mlx
     memory/                ← knowledge, episodic, procedural, research, retriever, learner
-    scanner/               ← project, claude_code, tools, repomap (new)
-    schemas/               ← JSON schemas for sprint contracts, evaluator verdicts
+    scanner/               ← project, claude_code, tools, repomap
+    # schemas/             ← (PLANNED) JSON schemas for contracts/verdicts — not yet implemented
     cli.py
     db.py
     models.py
@@ -96,10 +95,10 @@ docs/
   research/                ← notes/ + competitive-landscape-and-architecture.md
 scripts/
   pre-push.sh              ← heavy gate (the killer file — see §7)
-  sync-version.py          ← multi-target release version sync
   audit-docs.py            ← frontmatter validator (last_reviewed, owner)
   check-schema-parity.py   ← schema parity gate (see §11)
-  find-flakes.py           ← flake detection (5x test runner aggregator)
+  # sync-version.py        ← (PLANNED) multi-target release version sync — not yet implemented
+  # find-flakes.py         ← (PLANNED) flake detection (5x test runner aggregator) — not yet implemented
 .github/
   workflows/
     ci.yml                 ← intentionally light: security audit + advisory build
@@ -115,8 +114,8 @@ scripts/
 | Workflow tool | **`uv`** (Astral) | 10–100× faster than pip/Poetry; manages Python; universal lockfile |
 | Build backend | **`hatchling`** | Boring, stable, future-proof; survives workflow tool swaps |
 | Lockfile | **`uv.lock` committed** | Reproducible across contributors and CI; CI uses `uv sync --locked` |
-| Package layout | **`src/forge/`** (rename from `daemon/`) | Owns namespace; tests run against installed copy |
-| CLI entry point | **`[project.scripts] forge = "forge.cli:main"`** | Cross-platform launcher; `setup.sh` is the git-clone convenience path |
+| Package layout | **`daemon/`** (flat package; a `src/forge/` rename is *not planned* for v0.1) | Single import root; tests run against the working tree |
+| CLI entry point | **`[project.scripts] forge = "daemon.cli:main"`** | Cross-platform launcher; `setup.sh` is the git-clone convenience path |
 | Python floor | **3.10+** (recommended **3.11+**) | TaskGroup, asyncio.timeout, `match`, `X \| Y` unions, `tomllib` |
 | Dep groups | **PEP 735 `[dependency-groups]`** for dev/test/docs | Keeps user-visible extras clean |
 
@@ -137,7 +136,7 @@ Single command. See [§18](#18-the-first-5-commands-a-contributor-runs-from-a-fr
 
 - **Poetry / PDM** — `uv` has won (10–100× faster, manages Python, universal lockfile)
 - **Co-located tests** — Python tooling fights it; `tests/` tree with category subdirs is the right Python adaptation
-- **`src/forge/` vs flat `forge/`** — `src/` layout chosen because tests run against the installed copy, which catches packaging bugs the user would otherwise hit
+- **Flat `daemon/` package** — the codebase ships as a flat `daemon/` package imported directly; a `src/forge/` layout was considered but is *not planned* for v0.1 (it would churn every import for no v0.1 benefit)
 - **`setup.py` / `setup.cfg` / `requirements*.txt`** — all subsumed by `pyproject.toml`
 
 ---
@@ -250,7 +249,7 @@ ignore = [
 
 ### Hard rules
 
-- **No `print()` in committed `src/forge/` code.** Use `logging`. Enforced by ruff `T20`.
+- **No `print()` in committed `daemon/` code.** Use `logging`. Enforced by ruff `T20`.
 - **No `# type: ignore` without inline reason + issue link.** Enforced by ruff `RUF100` (banned without code) + `pyright` config `reportUnnecessaryTypeIgnoreComment = "warning"`. Pattern when truly needed:
   ```python
   result = legacy_api.call()  # type: ignore[no-any-return]  # see #142, upstream stub missing
@@ -314,7 +313,7 @@ strictSetInference = true
 | HTTP mocking | **respx** | Dedicated httpx mocking |
 | Property-based | **hypothesis** | Selectively for parsers (planner JSON, evaluator PASS/FAIL) |
 | Snapshot | **syrupy** | For prompt assembly + retriever output |
-| Flake detection | `scripts/find-flakes.py` | Runs pytest 5x, JSON output, aggregates flakes |
+| Flake detection | `scripts/find-flakes.py` *(PLANNED)* | Will run pytest 5x, JSON output, aggregate flakes |
 
 ### Pytest config
 
@@ -348,10 +347,10 @@ The reference TS/RN stack uses 85/85/75/82 for lines/functions/branches/statemen
 ```toml
 [tool.coverage.run]
 branch = true
-source = ["src/forge"]
+source = ["daemon"]
 omit = [
-  "src/forge/main.py",
-  "src/forge/_version.py",
+  "daemon/main.py",
+  "daemon/_version.py",
 ]
 
 [tool.coverage.report]
@@ -428,7 +427,7 @@ Reference: [Anthropic Red — Property-Based Testing with Claude](https://red.an
 
 ### Flake detection
 
-`scripts/find-flakes.py` runs pytest 5× with JSON output, aggregates failures, writes `docs/active/FLAKY-MEASURED.md`. Run weekly via `scheduled-tasks` skill or manually before each release.
+*(PLANNED — not yet implemented.)* `scripts/find-flakes.py` will run pytest 5× with JSON output, aggregate failures, and write `docs/active/FLAKY-MEASURED.md`. Intended to run weekly via the `scheduled-tasks` skill or manually before each release. Until then, use `pytest -p randomly` across a few seeds (the suite ships `pytest-randomly`).
 
 ### Tried & rejected
 
@@ -510,9 +509,9 @@ concurrency:
 
 ### Releases
 
-Manual, tag-driven. `forge version:bump` (calling `scripts/sync-version.py`) atomically updates:
+Manual, tag-driven. *(PLANNED — `scripts/sync-version.py` is not yet implemented.)* `forge version:bump` (calling `scripts/sync-version.py`) will atomically update:
 1. `pyproject.toml` `[project].version` (or git-tag-derived via `hatch-vcs` — preferred)
-2. `src/forge/_version.py`
+2. `daemon/_version.py`
 3. `CHANGELOG.md` (section heading + date)
 4. `ui/package.json` `version`
 5. `docs/BUILD_PLAN.md` (status header)
@@ -587,10 +586,10 @@ set -euo pipefail
 
 # 2. Detect what changed in the push
 CHANGED=$(git diff --name-only @{u}..HEAD 2>/dev/null || git diff --name-only HEAD~1..HEAD)
-src_changed()    { echo "$CHANGED" | grep -qE '^(src/forge/|tests/|pyproject\.toml)'; }
+src_changed()    { echo "$CHANGED" | grep -qE '^(daemon/|tests/|pyproject\.toml)'; }
 ui_changed()     { echo "$CHANGED" | grep -qE '^ui/'; }
 docs_changed()   { echo "$CHANGED" | grep -qE '^docs/'; }
-schema_changed() { echo "$CHANGED" | grep -qE '^(src/forge/db\.py|src/forge/models\.py|src/forge/ws_server\.py|ui/lib/types\.ts)$'; }
+schema_changed() { echo "$CHANGED" | grep -qE '^(daemon/db\.py|daemon/models\.py|daemon/ws_server\.py|ui/lib/types\.ts)$'; }
 
 # 3. Always-on (fast, read-only)
 echo "→ docs:audit"   ; uv run python scripts/audit-docs.py
@@ -651,7 +650,7 @@ echo "✅  pre-push gate passed"
 
 ### Use `asyncio.TaskGroup` (3.11+) over `asyncio.gather`
 
-For Forge's wave-based parallel sprint runner in `src/forge/scheduler.py`:
+For Forge's wave-based parallel sprint runner in `daemon/scheduler.py`:
 
 ```python
 async with asyncio.TaskGroup() as tg:
@@ -713,7 +712,7 @@ Forge uses sync `sqlite3` from async code. **This is the right call.** `aiosqlit
 
 ❌ Both — `asyncio.TaskGroup` gives 80% of `anyio`'s value for zero deps; `aiosqlite` is slower than sync at Forge's scale.
 
-### WebSocket patterns (`src/forge/ws_server.py`)
+### WebSocket patterns (`daemon/ws_server.py`)
 
 - **Bind 127.0.0.1 explicitly.** Library default is all interfaces.
 - **Default ping/pong intervals (20s/20s)** — fine for localhost; don't disable.
@@ -739,7 +738,7 @@ Reasoning:
 
 If you ever add one dep, `structlog` is the right choice. Defer until needed.
 
-### Concrete config (`src/forge/log.py`)
+### Concrete config (`daemon/log.py`)
 
 ```python
 import logging
@@ -839,7 +838,7 @@ Always `raise ... from e` (PEP 3134). Preserves the original traceback when wrap
 
 ### Validation at boundaries only
 
-- **System boundaries** (CLI args, WebSocket messages, MCP requests, subprocess output): validate aggressively. JSON schemas live in `src/forge/schemas/`.
+- **System boundaries** (CLI args, WebSocket messages, MCP requests, subprocess output): validate aggressively. *(PLANNED)* JSON schemas will live in `daemon/schemas/`; today validation is done in code (e.g. `daemon/safety.py`, the WS handlers).
 - **Internal functions**: trust callers. No double validation.
 
 ### Retry policy: minimal
@@ -853,7 +852,7 @@ Always `raise ... from e` (PEP 3134). Preserves the original traceback when wrap
 The reference repo's `silentCatch()` helper is the right pattern. Python equivalent:
 
 ```python
-# src/forge/safety.py
+# daemon/safety.py
 def silent_catch(scope: str, e: BaseException, *, log_level: int = logging.WARNING) -> None:
     """Explicitly drop an exception. Reported once to the audit log so it's grep-able."""
     logging.getLogger(scope).log(log_level, "silentCatch: %s", e, exc_info=True)
@@ -934,13 +933,21 @@ Forge has a similar dual-store surface:
 
 | Layer | Owns | Risk if drifted |
 |---|---|---|
-| `src/forge/db.py` | SQLite schema (CREATE TABLE statements) | DB rejects writes |
-| `src/forge/models.py` | Python dataclasses | TypeError at runtime |
-| `src/forge/ws_server.py` | WebSocket event JSON shapes | UI breaks silently |
+| `daemon/db.py` | SQLite schema (CREATE TABLE statements) | DB rejects writes |
+| `daemon/models.py` | Python dataclasses | TypeError at runtime |
+| `daemon/ws_server.py` | WebSocket event JSON shapes | UI breaks silently |
 | `ui/lib/types.ts` | TypeScript types for the WS protocol | Runtime errors only |
-| `src/forge/schemas/` | JSON schemas for sprint contracts + evaluator verdicts | Constrained-decoding fails |
+| `daemon/schemas/` | *(PLANNED)* JSON schemas for contracts + evaluator verdicts | Not yet implemented |
 
-**`scripts/check-schema-parity.py`** asserts these five locations are in sync. Runs on pre-push when any of the five files changes (skippable with `SKIP_SCHEMA_PARITY=1`). Failure prevents the push. This is the single biggest production-incident preventer.
+**`scripts/check-schema-parity.py`** asserts the **four implemented locations**
+(`daemon/db.py` ↔ `daemon/models.py` ↔ `ui/lib/types.ts`, with `ws_server.py`
+emitting the `models.py` `to_dict()` payloads) are in sync. It verifies, per
+registered entity: DB columns ⊆ the `to_dict()` keys, and `to_dict()` keys ==
+the TS interface fields. Runs on pre-push when any of those files changes
+(skippable with `SKIP_SCHEMA_PARITY=1`). Failure prevents the push. This is the
+single biggest production-incident preventer. The fifth location
+(`daemon/schemas/` JSON schemas for constrained decoding) is planned, not built;
+the gate will extend to it when it lands.
 
 ### Auth rule (LAW)
 
@@ -1000,16 +1007,16 @@ dynamic = ["version"]
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/forge/_version.py"
+version-file = "daemon/_version.py"
 ```
 
 Tag `v0.2.0` → wheel is `0.2.0`. Tag with extra commits → `0.2.0.post3+g<sha>`.
 
-### Multi-target sync via `scripts/sync-version.py`
+### Multi-target sync via `scripts/sync-version.py` *(PLANNED)*
 
 The reference repo has 6 sync points; Forge has 5. Script atomically updates:
 
-1. `src/forge/_version.py` (auto via `hatch-vcs` on build)
+1. `daemon/_version.py` (auto via `hatch-vcs` on build)
 2. `CHANGELOG.md` — add a section heading + date + cut the `## [Unreleased]` content into the new heading
 3. `ui/package.json` — `version` field
 4. `docs/BUILD_PLAN.md` — status header
@@ -1102,7 +1109,7 @@ Short imperative, prefix optional: `fix: planner JSON parser drops trailing comm
 
 ### Required reviewers
 
-Single human (small team). For security-sensitive paths (`src/forge/safety.py`, `src/forge/db.py` schema changes, anything under `src/forge/schemas/`), explicit approval required.
+Single human (small team). For security-sensitive paths (`daemon/safety.py`, `daemon/db.py` schema changes, anything under `daemon/schemas/`), explicit approval required.
 
 ### Self-merge
 
@@ -1124,10 +1131,10 @@ Used informally (`feature/X-part-1`, `feature/X-part-2`). No `git-spice` / `Grap
 
 ### LLM SDK usage
 
-- **Anthropic SDK** (when migrating off `claude -p` subprocess): `anthropic ^0.81.0`. Behind `src/forge/executors/anthropic_sdk.py` so tests can `respx`-mock it.
+- **Anthropic SDK** (when migrating off `claude -p` subprocess): `anthropic ^0.81.0`. Behind `daemon/executors/anthropic_sdk.py` so tests can `respx`-mock it.
 - **`claude -p` subprocess**: Forge's primary path today; instrumentation via stderr parsing.
-- **Ollama HTTP**: `src/forge/executors/ollama.py` reports `prompt_eval_count` + `eval_count` per call.
-- **OpenAI-compatible HTTP**: `src/forge/executors/openai_compatible.py` reports `usage.prompt_tokens` + `usage.completion_tokens`.
+- **Ollama HTTP**: `daemon/executors/ollama.py` reports `prompt_eval_count` + `eval_count` per call.
+- **OpenAI-compatible HTTP**: `daemon/executors/openai_compatible.py` reports `usage.prompt_tokens` + `usage.completion_tokens`.
 
 ### Trace capture
 
@@ -1139,13 +1146,13 @@ Per-session JSONL trace at `.forge/sessions/<id>/trace.jsonl`. Every agent step 
 
 ### Token accounting
 
-Real counts from API responses (not `len(s) // 4` heuristic). Replace [src/forge/executors/claude_code.py:51-52](../src/forge/executors/claude_code.py) (currently naive) with proper token counts when migrating to the Agent SDK.
+Real counts from API responses (not `len(s) // 4` heuristic). Replace [daemon/executors/claude_code.py:51-52](../daemon/executors/claude_code.py) (currently naive) with proper token counts when migrating to the Agent SDK.
 
-Budget enforcement happens in `src/forge/budget.py` per-session against `SESSION_BUDGET_USD`.
+Budget enforcement happens in `daemon/budget.py` per-session against `SESSION_BUDGET_USD`.
 
 ### Prompt versioning
 
-Prompts live in TS-style modules under `src/forge/prompts/*.py`:
+Prompts live in TS-style modules under `daemon/prompts/*.py`:
 
 ```python
 EVALUATOR_SYSTEM_PROMPT = """..."""
@@ -1185,7 +1192,7 @@ No external prompt registry (Promptlayer / Helicone) — adds vendor + complexit
 
 ### Patterns deliberately avoided
 
-- `print()` in committed `src/forge/` code (lint warns via `T20`)
+- `print()` in committed `daemon/` code (lint warns via `T20`)
 - `Any` type without justification (pyright flags)
 - `# type: ignore` without inline reason + issue link
 - Empty `except: pass` blocks — must call `silent_catch(scope, e)` helper with a comment
@@ -1271,7 +1278,7 @@ RUN_INTEGRATION=1 uv run pytest             # integration suite (needs Ollama)
 - **Pre-push > CI** is the single biggest opinion in this stack. CI minutes are scarce; developer machines are not. Push the slow gate left.
 - **Conditional checks in pre-push** (only test what changed, with `SKIP_*` escape hatches) is what makes the heavy gate tolerable.
 - **One script touches all version sync points** — UI versions diverge from daemon silently otherwise.
-- **Schema parity rule (5 locations, 1 commit)** is the single biggest production-incident preventer. SQL schema in `db.py` + dataclasses in `models.py` + WS protocol in `ws_server.py` + UI types in `ui/lib/types.ts` + JSON schemas in `src/forge/schemas/` must move together.
+- **Schema parity rule (4 implemented locations + 1 planned, 1 commit)** is the single biggest production-incident preventer. SQL schema in `db.py` + dataclasses in `models.py` (the `to_dict()` payloads `ws_server.py` emits) + UI types in `ui/lib/types.ts` must move together; JSON schemas in `daemon/schemas/` are planned and will join when built.
 
 ---
 
