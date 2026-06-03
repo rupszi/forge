@@ -123,7 +123,13 @@ def load_tasks_from_jsonl(path: str | Path) -> list[SWEBenchTask]:
 
 @dataclass
 class TaskRunResult:
-    """Outcome of one Forge run against a SWE-bench task."""
+    """Outcome of one Forge run against a SWE-bench task.
+
+    ``success`` is *Forge's own* view (the scheduler approved the sprint).
+    ``resolved`` is the *verified truth* from SWE-bench's harness — they can
+    disagree, and that disagreement is itself a Tier-3 thesis metric
+    (evaluator false-approve rate). The validity flags feed Tier 2.
+    """
 
     instance_id: str
     success: bool
@@ -135,6 +141,12 @@ class TaskRunResult:
     cost_usd: float = 0.0
     duration_seconds: float = 0.0
     evaluator_verdict: str = ""  # APPROVED | REVISE | FAIL
+    # ---- Verified outcome + validity signals (filled by the verifier) ----
+    resolved: bool | None = None  # None = not yet verified by the harness
+    patch_applied: bool = True  # did `git apply` succeed?
+    empty_patch: bool = False  # Forge produced no diff
+    harness_error: bool = False  # Docker/env failure — not Forge's fault
+    p2p_regressed: bool = False  # a PASS_TO_PASS test broke after the fix
 
 
 def task_to_sprint_contract(task: SWEBenchTask) -> dict[str, Any]:

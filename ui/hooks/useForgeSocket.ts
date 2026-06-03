@@ -11,6 +11,7 @@ import type {
   LocalityState,
   PoolState,
   ContextOptions,
+  BenchProfileOption,
 } from "@/lib/types";
 import type { Mode } from "@/components/ModePicker";
 import type { Verbosity } from "@/components/TranscriptView";
@@ -56,6 +57,8 @@ export function useForgeSocket() {
   const [branches, setBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [contextOptions, setContextOptions] = useState<ContextOptions | null>(null);
+  const [benchProfiles, setBenchProfiles] = useState<BenchProfileOption[]>([]);
+  const [benchProfile, setBenchProfileState] = useState<string>("gate");
 
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -74,6 +77,7 @@ export function useForgeSocket() {
       ws.send(JSON.stringify({ type: "branches.list", path: "." }));
       ws.send(JSON.stringify({ type: "context.options", model: "qwen2.5-coder:7b" }));
       ws.send(JSON.stringify({ type: "pool" }));
+      ws.send(JSON.stringify({ type: "bench.profiles" }));
     };
 
     ws.onclose = () => setConnected(false);
@@ -170,6 +174,9 @@ export function useForgeSocket() {
           break;
         case "tier_changed":
           setTier((msg as any).tier as Tier);
+          break;
+        case "bench_profiles":
+          setBenchProfiles(((msg as any).profiles ?? []) as BenchProfileOption[]);
           break;
         case "plan_created":
           setSprints((msg as any).sprints ?? []);
@@ -285,6 +292,12 @@ export function useForgeSocket() {
     send({ type: "branches.list", path });
   }, [send]);
 
+  // SWE-bench profile dropdown selection (local UI state; the run itself is
+  // launched from the CLI / a future bench.run message).
+  const setBenchProfile = useCallback((value: string) => {
+    setBenchProfileState(value);
+  }, []);
+
   const durationSec = Math.floor((Date.now() - sessionStartTs) / 1000);
 
   return {
@@ -317,6 +330,9 @@ export function useForgeSocket() {
     folderIsGit,
     branches,
     currentBranch,
+    benchProfiles,
+    benchProfile,
+    setBenchProfile,
     connectFolder,
     browseFolder,
     selectBranch,

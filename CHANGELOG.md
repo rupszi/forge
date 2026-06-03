@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### SWE-bench kill gate — metric tiers + selectable profiles (2026-06-04)
+
+Implemented the unit-testable core of the SWE-bench kill gate (the live Docker
+run still needs hardware). Metrics are organized into **5 tiers** (gate /
+validity / thesis / cost / determinism) and exposed through cost-bundled
+**profiles** users select from a dropdown:
+
+- `eval/swebench/tiers.py` — `MetricTier` + `BenchProfile` (gate 1× → diagnostic
+  1× → baseline 2× → full N×) with `profile_options()` powering the UI dropdown.
+- `eval/swebench/metrics.py` — tier-filtered `compute_metrics`, Wilson 95% CI
+  (reports whether the *lower bound* clears 30%, not just the point estimate),
+  evaluator false-approve rate, single-agent baseline delta, cost-per-resolved.
+- `eval/swebench/verify.py` — predictions writer + harness argv builder + report
+  parser (Forge never grades its own patches; the Docker call is injectable).
+- `eval/swebench/report.py` — markdown/JSON scorecard showing only selected tiers.
+- `forge bench` CLI — `--profile`, `--list-profiles`, `--subset`, `--dry-run`.
+- WS `bench.profiles` → `bench_profiles`; `ui` `BenchProfileSelect` dropdown +
+  `BenchProfileOption` type, wired into `ContextMeter`.
+
+22 new tests; full suite 1210 passing; `pnpm build` clean. The live gate run
+remains the documented one-command step for capable hardware.
+
 ### Audit remediation — all open findings closed (2026-06-04)
 
 Follow-up to the 2026-06-03 four-role audit: every remaining open finding

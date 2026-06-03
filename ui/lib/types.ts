@@ -121,6 +121,19 @@ export interface ContextOptions {
   model?: string;
 }
 
+// SWE-bench kill-gate metric profile for the dropdown (eval/swebench/tiers.py).
+// Each profile bundles metric tiers by cost: gate 1× → diagnostic 1× →
+// baseline 2× → full N×. Shape mirrors tiers.profile_options().
+export interface BenchProfileOption {
+  value: string; // gate | diagnostic | baseline | full
+  label: string;
+  description: string;
+  tiers: number[]; // MetricTier numbers (1..5)
+  tier_labels: string[];
+  runs: number; // passes over the subset
+  cost_multiplier: number; // ~× a single gate run
+}
+
 export interface ProjectContext {
   path: string;
   is_git: boolean;

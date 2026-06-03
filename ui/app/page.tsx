@@ -59,6 +59,9 @@ export default function Home() {
     contextOptions,
     setContextSize,
     setKvCache,
+    benchProfiles,
+    benchProfile,
+    setBenchProfile,
   } = useForgeSocket();
 
   // Slash palette state — controlled here so the prompt input can trigger it
@@ -94,6 +97,9 @@ export default function Home() {
           contextOptions={contextOptions}
           onContextChange={setContextSize}
           onKvChange={setKvCache}
+          benchProfiles={benchProfiles}
+          benchProfile={benchProfile}
+          onBenchProfileChange={setBenchProfile}
           tier={tier}
         />
       </div>

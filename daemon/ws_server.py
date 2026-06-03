@@ -364,6 +364,13 @@ async def _handle_message_inner(
         get_store().clear()
         return {"type": "attachments", "items": [], "ok": True, "cleared": True}
 
+    if msg_type == "bench.profiles":
+        # Populate the UI's SWE-bench profile dropdown. Each profile bundles
+        # metric tiers by cost (gate 1× → diagnostic 1× → baseline 2× → full N×).
+        from eval.swebench import tiers
+
+        return {"type": "bench_profiles", "profiles": tiers.profile_options()}
+
     if msg_type == "memory_tool":
         # Working-memory scratchpad (.forge/memories/). Path-scoped inside the
         # tool itself; here we just dispatch the command.

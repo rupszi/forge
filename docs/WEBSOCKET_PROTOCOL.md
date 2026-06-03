@@ -44,6 +44,7 @@ types return `{"type": "error", "error": "..."}`.
 | `attach.clear` | — | `attachments` | |
 | `file.fetch` | `path` | `file_content` | Path validated; symlink-safe |
 | `pool` | — | `pool` (`PoolState`) | Model-pool RAM/lease state |
+| `bench.profiles` | — | `bench_profiles` (`BenchProfileOption[]`) | SWE-bench metric-profile dropdown options (tiers + cost) |
 | `locality` | — | `locality` (`LocalityState`) | local vs cloud indicator |
 | `context.options` | `model` | `context_options` (`ContextOptions`) | num_ctx presets + KV estimate |
 | `set_context` | `value` (`"auto"` or int) | `context_options` | Sets the process-wide context size |
@@ -71,7 +72,7 @@ The `type` values handlers return: `project_context`, `plan_acknowledged`,
 `attachments`, `file_content`, `pool`, `locality`, `context_options`,
 `mode_changed`, `model_changed`, `models_installed`, `llms_list`, `skills_list`,
 `connectors_list`, `branches`, `branch_checkout`, `folder_init`,
-`folder_picked`, `wizard_hint`, `error`.
+`folder_picked`, `wizard_hint`, `bench_profiles`, `error`.
 
 Typed payloads mirrored in `ui/lib/types.ts`: `ProjectContext`, `Session`,
 `KnowledgeItem`, `BudgetState`, `LocalityState`, `PoolState`/`PoolModel`,

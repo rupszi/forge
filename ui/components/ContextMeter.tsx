@@ -26,6 +26,8 @@
 import React from "react";
 import { ModelPicker } from "./ModelPicker";
 import { ContextSizePicker } from "./ContextSizePicker";
+import { BenchProfileSelect } from "./BenchProfileSelect";
+import type { BenchProfileOption } from "@/lib/types";
 import type { ContextOptions } from "@/lib/types";
 
 export type Tier = "free" | "metered" | "subscription";
@@ -43,6 +45,10 @@ export type ContextMeterProps = {
   contextOptions?: ContextOptions | null;
   onContextChange?: (value: number | "auto") => void;
   onKvChange?: (value: string) => void;
+  // SWE-bench kill-gate profile dropdown.
+  benchProfiles?: BenchProfileOption[];
+  benchProfile?: string;
+  onBenchProfileChange?: (value: string) => void;
   // Tier comes from the daemon (billing.py::detect_tier). When undefined,
   // we fall back to a conservative "free" — the daemon ALWAYS sends one,
   // so undefined means "not connected yet" and we shouldn't guess.
@@ -68,6 +74,9 @@ export function ContextMeter(props: ContextMeterProps) {
     contextOptions,
     onContextChange,
     onKvChange,
+    benchProfiles,
+    benchProfile = "gate",
+    onBenchProfileChange,
     tier = "free",  // Conservative default — daemon ALWAYS sends one; this
                     // is just for the moments before connect lands.
     planUsage,
@@ -141,6 +150,17 @@ export function ContextMeter(props: ContextMeterProps) {
           <span className="px-1.5 py-0.5 text-[10px] rounded bg-teal-900/40 text-teal-300 border border-teal-800/30">
             Free (Ollama)
           </span>
+        </div>
+      )}
+
+      {/* SWE-bench profile dropdown — only when the daemon sent options */}
+      {benchProfiles && benchProfiles.length > 0 && onBenchProfileChange && (
+        <div className="flex items-center gap-2 border-l border-[#1e1e2e] pl-4">
+          <BenchProfileSelect
+            profiles={benchProfiles}
+            selected={benchProfile}
+            onChange={onBenchProfileChange}
+          />
         </div>
       )}
 

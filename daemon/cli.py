@@ -583,6 +583,69 @@ def cmd_digest(args):
     return 0
 
 
+def cmd_bench(args):
+    """Run (or plan) the SWE-bench kill gate at a selected metric profile.
+
+    The ``--profile`` selects how deep/expensive the run is (the same set the
+    UI dropdown offers): gate → diagnostic → baseline (2×) → full (N×). A live
+    run needs Docker + GPU + pulled models; ``--list-profiles`` and ``--dry-run``
+    work offline so users can inspect the plan and pick a profile first.
+    """
+    from eval.swebench import adapter, tiers
+    from eval.swebench.metrics import KILL_THRESHOLD_PCT
+
+    if getattr(args, "list_profiles", False):
+        print("\nBench profiles (pick with --profile):\n")
+        for spec in tiers.all_profiles():
+            tier_names = ", ".join(t.name for t in spec.tiers)
+            print(f"  {spec.profile.value:<11} {spec.label}  (~{spec.cost_multiplier()}× runs)")
+            print(f"              tiers: {tier_names}")
+            print(f"              {spec.description}\n")
+        return 0
+
+    try:
+        spec = tiers.get_profile(getattr(args, "profile", "gate"))
+    except ValueError as e:
+        print(e)
+        return 1
+
+    subset_path = getattr(args, "subset", None)
+    tasks = adapter.load_tasks_from_jsonl(subset_path) if subset_path else []
+
+    print(f"\nProfile: {spec.label} ({spec.profile.value})")
+    print(f"  tiers computed:   {', '.join(t.name for t in spec.tiers)}")
+    print(
+        f"  runs over subset: {spec.runs}"
+        + (" + single-agent baseline" if spec.needs_baseline_run else "")
+    )
+    print(f"  cost multiplier:  ~{spec.cost_multiplier()}× a single gate run")
+    print(
+        f"  subset:           {subset_path or '(none given — use --subset)'} ({len(tasks)} tasks)"
+    )
+    print(f"  kill criterion:   ≥{KILL_THRESHOLD_PCT:.0f}% resolved (ADR-015)")
+
+    if getattr(args, "dry_run", False) or not tasks:
+        if not tasks and not getattr(args, "dry_run", False):
+            print(
+                "\nNo tasks loaded — pass --subset PATH (see eval/swebench/README.md), "
+                "or use --dry-run to preview the plan."
+            )
+        else:
+            print("\n(dry run — nothing executed)")
+        return 0
+
+    # Live run: needs Docker/GPU/models. real_forge_runner is a stub until the
+    # hardware-bound Stage 3 is wired; surface that honestly rather than crash.
+    try:
+        result = adapter.run_subset(tasks, forge_runner=adapter.real_forge_runner)
+    except NotImplementedError as e:
+        print(f"\nLive run unavailable: {e}")
+        print("See eval/swebench/README.md to wire the Docker harness on capable hardware.")
+        return 2
+    print("\n" + result.summary())
+    return 0
+
+
 def cmd_models(args):
     """List / pull the default local model lineup with a disk-safety guard."""
     from . import model_setup
@@ -1093,6 +1156,23 @@ def build_parser() -> argparse.ArgumentParser:
     dg.add_argument("path", help="File to digest")
     dg.add_argument("--tokens", default=800, type=int, help="Target digest size (tokens)")
 
+    bench = sub.add_parser(
+        "bench", help="Run (or plan) the SWE-bench kill gate at a metric profile"
+    )
+    bench.add_argument(
+        "--profile",
+        choices=["gate", "diagnostic", "baseline", "full"],
+        default="gate",
+        help="Metric depth: gate (1×) → diagnostic (1×) → baseline (2×) → full (N×)",
+    )
+    bench.add_argument("--subset", default=None, help="Path to a SWE-bench tasks JSONL")
+    bench.add_argument(
+        "--list-profiles", action="store_true", help="List profiles + their tiers/cost and exit"
+    )
+    bench.add_argument(
+        "--dry-run", action="store_true", help="Print the run plan without executing"
+    )
+
     mdl = sub.add_parser("models", help="List / pull the default local model lineup")
     mdl.add_argument("action", nargs="?", default="list", choices=["list", "pull"])
     mdl.add_argument(
@@ -1174,6 +1254,7 @@ def main():
         "memory": cmd_memory,
         "budget": cmd_budget,
         "models": cmd_models,
+        "bench": cmd_bench,
         "plan": cmd_plan,
         "run": cmd_run,
         "add": cmd_add,
