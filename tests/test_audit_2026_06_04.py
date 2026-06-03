@@ -390,3 +390,30 @@ class TestResearcherAndBatchRouting:
         from daemon import routing
 
         assert routing.is_cloud_executor("batch") is True
+
+
+# ---- F15: autouse fixtures isolate global singletons ----
+
+
+class TestGlobalSingletonIsolation:
+    """These two tests would interfere without the autouse reset in conftest:
+    the first pollutes the attachment store + context setting, the second sees
+    a clean baseline. pytest-randomly may run them in either order — both must
+    start clean."""
+
+    def test_a_pollutes_then_expects_clean_start(self, tmp_path):
+        from daemon import attachments, context_window
+
+        assert attachments.get_store().list() == []  # clean at entry
+        assert context_window.get_setting() == "auto"
+        f = tmp_path / "x.txt"
+        f.write_text("data")
+        attachments.get_store().add_path(str(f))
+        context_window.set_setting(8192)
+        assert attachments.get_store().list()  # polluted within this test
+
+    def test_b_also_expects_clean_start(self, tmp_path):
+        from daemon import attachments, context_window
+
+        assert attachments.get_store().list() == []  # reset between tests
+        assert context_window.get_setting() == "auto"
