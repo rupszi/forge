@@ -2,16 +2,21 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python: 3.10+](https://img.shields.io/badge/python-3.10+-green.svg)](pyproject.toml)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
+[![Status: unmaintained](https://img.shields.io/badge/status-unmaintained%20%C2%B7%20fork%20freely-lightgrey.svg)]()
 [![No telemetry](https://img.shields.io/badge/telemetry-none-success.svg)](docs/DECISIONS.md)
 [![Tests: passing](https://img.shields.io/badge/tests-passing-success.svg)]()
+
+> ⚠️ **Unmaintained — fork freely.** This is a v0.1 proof-of-concept I'm no
+> longer actively developing. It's **MIT-licensed**: fork it, build on it, ship
+> your own version — no permission needed. Issues and PRs here may not be
+> reviewed. If you take it somewhere good, that's the whole point.
 
 > **Status: v0.1, local-first.** Runs as a **local web dashboard in your browser**
 > (`forge serve`) — OS-agnostic, no native app or installer to build. The
 > SWE-bench thesis gate (the project's own go/no-go) is **unrun**: run it
-> yourself and report results (see [eval/swebench/](eval/swebench/README.md)).
-> A native desktop shell (Tauri) and a few UI panels are **WIP / open for
-> contributors**. This is an honest pre-release, not finished-product polish.
+> yourself (see [eval/swebench/](eval/swebench/README.md)). A native desktop
+> shell (Tauri) and a few UI panels are unfinished — **fork and build on it** if
+> you want them. This is an honest pre-release, not finished-product polish.
 
 > **Forge is the harness that doesn't trust its own work.**
 
@@ -21,7 +26,7 @@ Multi-agent harnesses are commodity in 2026 — every major coding tool ships so
 
 → **New user? Start here:** **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** — install, pull models, start the app, connect models, orchestrate agents, generate documents. Local-first, free by default.
 
-→ **Read more:** [docs/POSITIONING.md](docs/POSITIONING.md) (one-sentence story + research synthesis) · [docs/COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) (head-to-head with 18+ tools) · [docs/ROADMAP.md](docs/ROADMAP.md) (what's shipped + what's open for contributors)
+→ **Read more:** [docs/POSITIONING.md](docs/POSITIONING.md) (one-sentence story + research synthesis) · [docs/COMPETITIVE_COMPARISON.md](docs/COMPETITIVE_COMPARISON.md) (head-to-head with 18+ tools) · [docs/ROADMAP.md](docs/ROADMAP.md) (what's shipped + what's unfinished, if you fork)
 
 ---
 
@@ -212,7 +217,7 @@ No agent frameworks. No LangChain. No CrewAI. See [docs/DECISIONS.md ADR-011](do
 
 **Start here:**
 - **[docs/POSITIONING.md](docs/POSITIONING.md)** — what Forge is, what it isn't, OpenClaw / OpenHands / Cursor / Claude Code comparisons in one read
-- **[docs/ROADMAP.md](docs/ROADMAP.md)** — what's shipped + what's open for contributors (every deferred feature has a contract + entry point + acceptance gates)
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** — what's shipped + what's unfinished (every deferred feature has a contract + entry point + acceptance gates — handy if you fork)
 - **[INSTALL.md](INSTALL.md)** — detailed install + troubleshooting
 
 **Deeper dives:**
@@ -237,15 +242,18 @@ No agent frameworks. No LangChain. No CrewAI. See [docs/DECISIONS.md ADR-011](do
 
 **v0.1, local-first pre-release.** The test suite is green (**1210 tests**); ruff + schema-parity + docs-audit clean; `pip-audit` clean; UI builds. The 2026-06-04 audit closed every finding (see [docs/audits/](docs/audits/2026-06-04-forge-studio/REPORT.md)).
 
-Forge ships as the **OS-agnostic browser dashboard** (`forge serve`) — there is no native app or installer to build. A native desktop shell (Tauri) and a few UI panels are **WIP / open for contributors**. `pyright` is advisory for v0.1 (a tracked type-annotation backlog; the suite is green).
+Forge ships as the **OS-agnostic browser dashboard** (`forge serve`) — there is no native app or installer to build. A native desktop shell (Tauri) and a few UI panels are unfinished — **fork and build on them** if you need them. `pyright` is advisory for v0.1 (a tracked type-annotation backlog; the suite is green).
 
-The central thesis is **not yet proven**: the SWE-bench kill gate is **unrun** (it needs Docker + GPU + local models). Run it on your own hardware and report — `forge bench --list-profiles`, then see [eval/swebench/](eval/swebench/README.md). What's shipped vs open for contributors lives in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/FORGE_STUDIO_TRACKER.md](docs/FORGE_STUDIO_TRACKER.md).
+The central thesis is **not yet proven**: the SWE-bench kill gate is **unrun** (it needs Docker + GPU + local models). Run it on your own hardware — `forge bench --list-profiles`, then see [eval/swebench/](eval/swebench/README.md). What's shipped vs what's unfinished lives in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/FORGE_STUDIO_TRACKER.md](docs/FORGE_STUDIO_TRACKER.md).
 
 Hard kill criterion: if Forge can't reach **≥30% on a 50-task SWE-bench Verified subset** with the open-weight stack, the open-weight thesis fails and the project pivots. See [docs/DECISIONS.md ADR-015](docs/DECISIONS.md).
 
-## Contributing
+## Contributing / forking
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Every PR runs the local pre-push gate before pushing — CI is intentionally light.
+This repo is **unmaintained** — I'm not actively reviewing issues or PRs. The
+best way to build on it is to **fork it and make it yours** (MIT — no permission
+needed). [CONTRIBUTING.md](CONTRIBUTING.md) and the local pre-push gate are still
+here if you want the same engineering discipline in your fork.
 
 ## Code of Conduct
 
