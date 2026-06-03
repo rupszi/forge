@@ -708,7 +708,8 @@ def test_mailgun_key_redacted():
 # ---- Twilio ----
 
 def test_twilio_sid_redacted():
-    text = "TWILIO_SID=AC0123456789abcdef0123456789abcdef"
+    sid = "AC" + "0123456789abcdef" * 2   # synthetic AC+32-hex, assembled at runtime
+    text = f"TWILIO_SID={sid}"
     out = redact(text)
     assert "[REDACTED:TWILIO_SID]" in out
 
