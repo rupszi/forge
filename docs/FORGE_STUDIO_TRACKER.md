@@ -1,7 +1,7 @@
 ---
 status: live
 owner: pal.megyes
-last_reviewed: 2026-06-02
+last_reviewed: 2026-06-04
 ---
 
 # Forge Studio — Live Build Tracker
@@ -26,6 +26,8 @@ last_reviewed: 2026-06-02
 **Update protocol:** when you start a task set it 🟡; when the PR is open set it 🔵; mark ✅ **only** when its success gate passes with linked evidence (test name, trace excerpt, or screenshot). Bump `last_reviewed` on every edit. Never mark a milestone ✅ until all its tasks **and** its exit gate are ✅.
 
 **Post-M4 usability pass (2026-06-02):** `forge serve` now launches the daemon **and** the dashboard in one command (`--no-ui` for headless); default model lineup repointed to real pullable Ollama tags (qwen2.5 / llama3.1 / nomic-embed-text) so `forge models pull` + `forge run` work out of the box; **[docs/USER_GUIDE.md](USER_GUIDE.md)** written (install → models → start → connect models → orchestrate agents → documents) and README refreshed. Full suite 1044 passed.
+
+**Audit remediation (2026-06-04):** the 2026-06-03 four-role audit's two High findings (evaluator-on-cloud, symlink escape) plus **all** remaining open findings F3–F15 are now closed, each with a regression test in `tests/test_audit_2026_06_04.py`. Highlights: scratchpad scoped per (project, session); `FORGE_REDACT_PROMPTS` implemented; injected context fenced as untrusted data; MLX weight cache; `num_ctx` snapshot per sprint; `scripts/check-schema-parity.py` built (caught a real `SprintContract.critical` TS drift); 4 weak tests rewritten; `pytest-randomly` + autouse reset fixtures added; `ENGINEERING_STANDARDS.md` reconciled (`src/forge/`→`daemon/`); `docs/WEBSOCKET_PROTOCOL.md` added. Full suite **1187 passed, 1 skipped**, stable across 3 randomized seeds. Fresh report: [docs/audits/2026-06-04-forge-studio/](audits/2026-06-04-forge-studio/REPORT.md). The SWE-bench kill gate remains **unrun** (needs models/GPU).
 
 ---
 
