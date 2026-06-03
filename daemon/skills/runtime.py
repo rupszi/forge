@@ -165,30 +165,44 @@ def _make_resource_limiter(cpu_seconds: int, memory_mb: int):
 
     On systems without ``resource`` (Windows), returns None — the limits
     silently don't apply. Document this in SKILLS.md "Roadmap".
+
+    Why only CPU / file-size / core-dump limits? Those are genuinely
+    *per-process* and work reliably on Linux and macOS. The two limits this used
+    to set — ``RLIMIT_AS`` (memory) and ``RLIMIT_NPROC`` (process count) — are
+    the wrong tools for sandboxing a single subprocess:
+
+      - ``RLIMIT_AS`` caps total *virtual* address space; Linux enforces it
+        strictly, so a few-hundred-MB cap kills a Python-interpreter subprocess
+        (and its mmap'd shared libs) at startup. (``RLIMIT_DATA`` is the inverse:
+        unreliable on macOS.)
+      - ``RLIMIT_NPROC`` is **per-user**, not per-process-tree — it counts every
+        process the user already runs, so an absolute cap (e.g. 50) makes the
+        skill's first ``fork`` fail with EAGAIN on any normally-busy machine or
+        CI runner.
+
+    Both were effectively non-functional (one broke Linux, the other broke any
+    busy session; on macOS the AS failure happened to short-circuit NPROC). Hard
+    memory + process-count isolation needs cgroups / PID namespaces; ``memory_mb``
+    is retained on the signature for that future path (see SKILLS.md roadmap).
+    The CPU-time limit still bounds runaway compute and file-size still bounds
+    disk fill.
     """
     try:
         import resource
     except ImportError:
         return None
 
+    del memory_mb  # reserved for a future cgroup-based cap; rlimit can't do it safely
+
     def apply():
         try:
-            # Memory: hard cap at memory_mb
-            limit_bytes = memory_mb * 1024 * 1024
-            resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
-            # CPU time
+            # CPU time (caps infinite loops / runaway compute) — per-process, safe.
             resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
-            # File size: 100 MB max output per file
+            # File size: 100 MB max output per file — per-process, safe.
             fsize = 100 * 1024 * 1024
             resource.setrlimit(resource.RLIMIT_FSIZE, (fsize, fsize))
             # No core dumps
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-            # Cap on number of child processes (anti fork-bomb)
-            try:
-                resource.setrlimit(resource.RLIMIT_NPROC, (50, 50))
-            except (ValueError, OSError):
-                # macOS doesn't support per-user RLIMIT_NPROC reliably; skip
-                pass
         except (ValueError, OSError) as e:
             # We're in a forked child here; can only write to stderr.
             # Using os.write avoids the T201 lint rule that bans `print`

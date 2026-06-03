@@ -409,6 +409,38 @@ class TestResearcherAndBatchRouting:
         assert routing.is_cloud_executor("batch") is True
 
 
+# ---- Sandbox limiter must not break subprocess fork/exec (CI fix) ----
+
+
+class TestSandboxResourceLimiter:
+    def test_limiter_allows_child_to_fork_and_exec(self):
+        """The skill sandbox limiter previously set an absolute, per-user
+        RLIMIT_NPROC (and a too-low RLIMIT_AS), so the sandboxed skill's first
+        fork failed with EAGAIN on any busy machine / CI runner. The limiter
+        must let a child process fork+exec another process."""
+        import subprocess
+        import sys
+
+        from daemon.skills.runtime import _make_resource_limiter
+
+        limiter = _make_resource_limiter(cpu_seconds=30, memory_mb=256)
+        if limiter is None:
+            pytest.skip("no POSIX resource module (Windows)")
+
+        # The child itself spawns a grandchild — the exact fork that used to
+        # fail under the per-user process cap.
+        code = "import subprocess,sys;subprocess.run([sys.executable,'-c','print(42)'],check=True)"
+        r = subprocess.run(
+            [sys.executable, "-c", code],
+            preexec_fn=limiter,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert r.returncode == 0, r.stderr
+        assert "42" in r.stdout
+
+
 # ---- F15: autouse fixtures isolate global singletons ----
 
 
